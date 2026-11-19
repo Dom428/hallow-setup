@@ -1,5 +1,6 @@
 ﻿// Hallow Setup - one window to install, update and start-with-Windows the Hallow family:
 // Mixer, Hub, Vault, Overlay, Remote, Clips, Keys and Toolkit. Nothing is downloaded until you click Install or Update.
+// v1.3: Uninstall per app (Uninstall.cs, UninstallDialog.cs).
 using System;
 using System.Linq;
 using System.Reflection;
@@ -15,14 +16,14 @@ using System.Windows.Media.Imaging;
 [assembly: AssemblyTitle("Hallow Setup")]
 [assembly: AssemblyProduct("Hallow Setup")]
 [assembly: AssemblyDescription("Install and update the Hallow apps")]
-[assembly: AssemblyVersion("1.2.0.0")]
-[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyVersion("1.3.0.0")]
+[assembly: AssemblyFileVersion("1.3.0.0")]
 
 namespace HallowSetup
 {
     public static class Program
     {
-        public const string Version = "1.2";
+        public const string Version = "1.3";
         public static string AccentHex = "#F07820";
         [STAThread]
         public static void Main(string[] args)
@@ -53,6 +54,14 @@ namespace HallowSetup
                 Setup.CheckSelf(); string r;
                 try { r = "newer=" + Setup.SelfNewer() + " " + (Setup.SelfNewer() ? Setup.UpdateSelf(p => { }) ?? "started" : "-"); } catch (Exception e) { r = "failed: " + e.Message; }
                 System.IO.File.WriteAllText(args[ui + 1], r); return;
+            }
+            int xi = Array.IndexOf(args, "--test-uninstall");   // developer tests only (all the test folders must be set): uninstall <app> <data 0/1> <force 0/1> <out>
+            if (xi >= 0 && xi + 4 < args.Length && Setup.TestMode)
+            {
+                var a = Setup.Apps.FirstOrDefault(x => string.Equals(x.Name, args[xi + 1], StringComparison.OrdinalIgnoreCase)); string res;
+                try { var r = a == null ? null : Uninstaller.Uninstall(a, args[xi + 2] == "1", args[xi + 3] == "1", p => { }); res = r == null ? "no such app" : (r.StillRunning ? "STILLRUNNING " : r.Ok ? "OK " : "FAIL ") + r.Message; }
+                catch (Exception e) { res = "EXC " + e.Message; }
+                System.IO.File.WriteAllText(args[xi + 4], res); return;
             }
             int si = Array.IndexOf(args, "--snap");
             if (si >= 0 && si + 1 < args.Length) { Snap.On = true; new MainWindow().SnapAll(args[si + 1]); return; }
@@ -180,6 +189,12 @@ namespace HallowSetup
             var btn = new Button { Content = label, Style = (Style)FindResource(label == "Install" || label == "Update" ? "Accent" : "Btn"), MinWidth = 108, IsEnabled = enabled };
             btn.Click += (s, e) => Install(a);
             right.Children.Add(btn);
+            if (installed)   // v1.3
+            {
+                var un = new Button { Content = "Uninstall", Tag = "icon", Style = (Style)FindResource("Btn"), Margin = new Thickness(8, 0, 0, 0), Padding = new Thickness(10, 7, 10, 7), IsEnabled = !busy, ToolTip = "Uninstall " + a.Title };
+                un.Click += (s, e) => Uninstall(a);
+                right.Children.Add(un);
+            }
             DockPanel.SetDock(right, Dock.Right); dp.Children.Add(right);
             var mid = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
             var name = new TextBlock { FontSize = 14 }; name.Inlines.Add(new System.Windows.Documents.Run(a.Title) { FontWeight = FontWeights.SemiBold });
@@ -227,11 +242,57 @@ namespace HallowSetup
             }) { IsBackground = true }.Start();
         }
 
+        // ---- v1.3: uninstall one app (asks first; settings and data only when ticked, to the Recycle Bin)
+        void Uninstall(HallowApp a)
+        {
+            if (busy) return;
+            if (a.IsToolkit) { UninstallToolkit(); return; }
+            bool withData; if (!UninstallDialog.Ask(this, a, out withData)) return;
+            RunUninstall(a, withData, false);
+        }
+        void RunUninstall(HallowApp a, bool withData, bool force)
+        {
+            busy = true; Refresh(); checkBtn.IsEnabled = false;
+            new Thread(() =>
+            {
+                UninstallResult r;
+                try { r = Uninstaller.Uninstall(a, withData, force, p => Dispatcher.BeginInvoke(new Action(() => { status.Text = p; status.Foreground = (Brush)FindResource("Muted"); }))); }
+                catch (Exception e) { r = new UninstallResult { Message = "Uninstall failed: " + e.Message }; }
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    busy = false; checkBtn.IsEnabled = true; a.Ticked = false; Refresh();
+                    if (r.StillRunning)
+                    {
+                        if (MessageBox.Show(this, a.Title + " didn't close when asked.\n\nClose it anyway and uninstall? Anything it hasn't saved yet is lost.", "Hallow Setup", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes) RunUninstall(a, withData, true);
+                        else Say(a.Title + " is still installed - close it from its tray icon, then click Uninstall again.", true);
+                        return;
+                    }
+                    Say(r.Message, !r.Ok);
+                }));
+            }) { IsBackground = true }.Start();
+        }
+        // Hallow Toolkit installs as admin: start its own uninstaller (Windows asks you), or say how to remove it
+        void UninstallToolkit()
+        {
+            if (Uninstaller.ToolkitUninstaller() != null)
+            {
+                if (MessageBox.Show(this, "Hallow Toolkit uninstalls as admin, so Hallow Setup starts its own uninstaller and Windows asks you to allow it.\n\nContinue?", "Uninstall Hallow Toolkit", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+                try { var m = Uninstaller.StartToolkitUninstaller(); Say(m, m.StartsWith("Cancelled")); } catch (Exception e) { Say("Couldn't start Hallow Toolkit's uninstaller: " + e.Message, true); }
+                return;
+            }
+            if (MessageBox.Show(this, "Hallow Toolkit doesn't have its own uninstaller yet, and it changes Windows settings as admin, so Hallow Setup doesn't remove it for you.\n\n" +
+                "To remove it: open Hallow Toolkit, undo the tweaks you want back and turn off its weekly clean-up, then delete " + Setup.ToolkitDir + " and its Desktop and Start menu shortcuts.\n\nOpen its folder now?",
+                "Uninstall Hallow Toolkit", MessageBoxButton.YesNo, MessageBoxImage.Information) == MessageBoxResult.Yes)
+                try { System.Diagnostics.Process.Start("explorer.exe", "\"" + Setup.ToolkitDir + "\""); } catch { }
+        }
+
         public void SnapAll(string dir)
         {
             if (Setup.TestMode) { Setup.CheckLatest(); Setup.CheckSelf(); foreach (var a in Setup.Apps) a.Ticked = a.UpdateAvailable || !a.Installed && !a.IsToolkit; }   // only against the test stand-in, never GitHub
             Refresh(); if (Setup.TestMode) Summary(); else Say("Snapshot - versions on this PC only.", false);
             Snap.Save(this, System.IO.Path.Combine(dir, "main.png"), 760, 0);
+            foreach (var a in Setup.Apps.Where(x => x.Installed && !x.IsToolkit))   // v1.3: the uninstall dialog (nothing is removed)
+            { CheckBox data; Snap.Save(UninstallDialog.Build(null, a, out data), System.IO.Path.Combine(dir, "uninstall-" + a.Name + ".png"), 540, 0); }
         }
     }
 }

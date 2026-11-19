@@ -44,7 +44,7 @@ namespace HallowSetup
             }
         }
         public Version Latest;          // from GitHub (null until checked)
-        public bool Running { get { return !IsToolkit && Process.GetProcessesByName("Hallow" + Name).Length > 0; } }
+        public bool Running { get { return !IsToolkit && Uninstaller.Processes(this).Length > 0; } }   // v1.3: only copies running from the installed exe
         public bool UpdateAvailable { get { var v = InstalledVersion; return v != null && Latest != null && Latest > v; } }
 
         // Start with Windows: the app's own HKCU Run value "Hallow<App>" = "<exe>" --tray (what its own Settings switch writes)

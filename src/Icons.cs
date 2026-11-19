@@ -19,7 +19,7 @@ namespace HallowSetup
         // exact label -> icon
         static readonly Dictionary<string, string> Labels = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
             { "Install", "download" }, { "Update", "arrows-rotate" }, { "Reinstall", "arrows-rotate" }, { "Up to date", "check" }, { "Open", "arrow-up-right-from-square" },
-            { "Check for updates", "arrows-rotate" }, { "Install ticked", "download" }, { "x", "xmark" }, { "OK", "check" },
+            { "Check for updates", "arrows-rotate" }, { "Install ticked", "download" }, { "x", "xmark" }, { "OK", "check" }, { "Uninstall", "trash-can" }, { "Cancel", "xmark" },
         };
         static readonly string[][] Prefixes = { new[] { "Install ticked", "download" }, new[] { "Update Hallow Setup", "arrows-rotate" } };
         public static string ForLabel(string label)
