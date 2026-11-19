@@ -13,6 +13,10 @@ WHAT IT DOES
 - Hallow Toolkit installs as admin: Setup starts its installer and Windows asks you first.
 - Start with Windows: the same switch as in each app's own Settings.
 
+WHAT'S NEW IN 1.1
+- Install ticked: tick apps and install or update them one after another.
+- Hallow Setup updates itself (checksum checked, reopens by itself).
+
 WHAT'S NEW IN 1.0
 - First version.
 

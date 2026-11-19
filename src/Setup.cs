@@ -27,6 +27,7 @@ namespace HallowSetup
         public bool IsToolkit { get { return Name == "Toolkit"; } }
         public string Title { get { return "Hallow " + Name; } }
         public string Repo { get { return "Dom428/hallow-" + Name.ToLowerInvariant(); } }
+        public bool Ticked;   // v1.1: picked for "Install ticked"
         public string Exe { get { return IsToolkit ? Path.Combine(Setup.ToolkitDir, "HallowToolkit.ps1") : Path.Combine(Setup.Local, "Programs", "Hallow " + Name, "Hallow" + Name + ".exe"); } }
         public bool Installed { get { return File.Exists(Exe); } }
         public Version InstalledVersion
@@ -168,6 +169,55 @@ namespace HallowSetup
             }
             finally { if (!keep) try { Directory.Delete(tmp, true); } catch { } }
         }
+        // ---- v1.1: install several apps one after another (Toolkit last, since it asks for admin). One line per app.
+        public static List<string> InstallMany(IEnumerable<HallowApp> apps, Action<string> progress)
+        {
+            var res = new List<string>();
+            foreach (var a in apps.OrderBy(x => x.IsToolkit ? 1 : 0).ToList())
+            {
+                progress("Installing " + a.Title + " (" + (res.Count + 1) + " of " + apps.Count() + ")...");
+                string r; try { r = Install(a, progress); } catch (Exception e) { r = a.Title + ": install failed - " + e.Message; }
+                res.Add(r);
+            }
+            return res;
+        }
+
+        // ---- v1.1: Hallow Setup updates itself (same checks: GitHub's SHA-256 must match). The new exe replaces this one
+        // after this copy closes, then opens.
+        public static Version Current { get { return typeof(Setup).Assembly.GetName().Version; } }
+        public static HallowApp Self = new HallowApp { Name = "Setup", Icon = "download", Desc = "" };
+        public static bool SelfNewer() { return Self.Latest != null && Self.Latest > new Version(Current.Major, Current.Minor, Math.Max(0, Current.Build), 0); }
+        public static void CheckSelf() { try { var r = LatestRelease(Self); object t; if (r.TryGetValue("tag_name", out t)) Self.Latest = Ver(t as string); } catch { } }
+        // returns an error, or null once the swap is under way (the caller then closes)
+        public static string UpdateSelf(Action<string> progress)
+        {
+            Dictionary<string, object> rel;
+            try { rel = LatestRelease(Self); } catch (Exception e) { return "Couldn't reach GitHub: " + e.Message; }
+            object o; var assets = rel.TryGetValue("assets", out o) ? o as System.Collections.ArrayList : null;
+            var asset = assets == null ? null : assets.OfType<Dictionary<string, object>>().FirstOrDefault(x => (x.ContainsKey("name") ? x["name"] as string ?? "" : "").EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
+            if (asset == null) return "The latest Hallow Setup release has no download.";
+            var digest = asset.ContainsKey("digest") ? asset["digest"] as string ?? "" : ""; var sha = digest.StartsWith("sha256:") ? digest.Substring(7) : "";
+            if (!Regex.IsMatch(sha, "^[0-9a-fA-F]{64}$")) return "GitHub didn't give a checksum for the Hallow Setup download - not updated.";
+            var tmp = Path.Combine(Path.GetTempPath(), "hallow-setup-self-" + Guid.NewGuid().ToString("N").Substring(0, 8)); Directory.CreateDirectory(tmp);
+            var zip = Path.Combine(tmp, "download.zip");
+            progress("Downloading Hallow Setup...");
+            try { using (var wc = new WebClient()) { wc.Headers["User-Agent"] = "HallowSetup"; wc.DownloadFile(asset["browser_download_url"] as string, zip); } }
+            catch (Exception e) { try { Directory.Delete(tmp, true); } catch { } return "Download failed: " + e.Message; }
+            string got; using (var s = File.OpenRead(zip)) using (var h = SHA256.Create()) got = BitConverter.ToString(h.ComputeHash(s)).Replace("-", "");
+            if (!string.Equals(got, sha, StringComparison.OrdinalIgnoreCase)) { try { Directory.Delete(tmp, true); } catch { } return "The download doesn't match GitHub's checksum - not updated."; }
+            var xdir = Path.Combine(tmp, "x"); ZipFile.ExtractToDirectory(zip, xdir);
+            var exe = Directory.GetFiles(xdir, "HallowSetup.exe", SearchOption.AllDirectories).FirstOrDefault();
+            if (exe == null) return "The download has no HallowSetup.exe.";
+            var me = Process.GetCurrentProcess().MainModule.FileName;
+            var cmd = Path.Combine(tmp, "swap.cmd");
+            File.WriteAllText(cmd, "@echo off\r\n" +
+                ":wait\r\ntasklist /fi \"PID eq " + Process.GetCurrentProcess().Id + "\" | find \"" + Process.GetCurrentProcess().Id + "\" >nul && (timeout /t 1 /nobreak >nul & goto wait)\r\n" +
+                "copy /y \"" + exe + "\" \"" + me + "\" >nul\r\nstart \"\" \"" + me + "\"\r\n", Encoding.ASCII);
+            if (DryRun) { try { Directory.Delete(tmp, true); } catch { } return "TEST: checked and unpacked Hallow Setup " + Show(Ver(rel["tag_name"] as string)) + " - would replace " + Path.GetFileName(me) + "."; }
+            Process.Start(new ProcessStartInfo("cmd.exe", "/c \"" + cmd + "\"") { UseShellExecute = false, CreateNoWindow = true });
+            return null;
+        }
+
         public static bool Elevated() { try { return new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator); } catch { return false; } }
 
         // the shared Hallow accent (%APPDATA%\Hallow\theme.json), or null
