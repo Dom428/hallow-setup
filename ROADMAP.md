@@ -6,11 +6,9 @@
 |---|---|
 | **1.0** | Checklist of the seven Hallow apps with installed and latest versions; Install / Update with SHA-256-verified release zips and each app's own installer run as you; Toolkit's installer started for UAC; Start with Windows per app |
 | **1.1** | Install ticked (several apps in sequence, Toolkit last, updates pre-ticked); Setup updates itself (SHA-256 checked, replaces its exe after closing and reopens) |
+| **1.2** | Hallow Keys in the list (install / update with the checksum check, Start with Windows) |
 
 ## Next
-
-### 1.2 - Hallow Keys
-- Hallow Keys in the list (install, update, start with Windows)
 
 ### Still to check by hand
 - A real install / update from GitHub (tested against a local stand-in for GitHub only)

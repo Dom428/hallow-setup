@@ -6,12 +6,15 @@ HOW TO USE
 3. Double-click HallowSetup.exe (no admin needed, nothing to install)
 
 WHAT IT DOES
-- Shows every Hallow app (Mixer, Hub, Vault, Overlay, Remote, Clips, Toolkit) with the version
+- Shows every Hallow app (Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Toolkit) with the version
   on your PC and the newest one.
 - Install / Update downloads that app's release from GitHub only when you click, checks it against
   GitHub's SHA-256 checksum, and runs the app's own installer as you (never as admin).
 - Hallow Toolkit installs as admin: Setup starts its installer and Windows asks you first.
 - Start with Windows: the same switch as in each app's own Settings.
+
+WHAT'S NEW IN 1.2
+- Hallow Keys is in the list.
 
 WHAT'S NEW IN 1.1
 - Install ticked: tick apps and install or update them one after another.
