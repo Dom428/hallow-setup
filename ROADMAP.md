@@ -9,6 +9,9 @@
 
 ## Next
 
+### 1.2 - Hallow Keys
+- Hallow Keys in the list (install, update, start with Windows)
+
 ### Still to check by hand
 - A real install / update from GitHub (tested against a local stand-in for GitHub only)
 - Hallow Toolkit's installer through UAC
