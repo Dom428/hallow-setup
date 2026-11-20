@@ -72,6 +72,7 @@ namespace HallowSetup
             new HallowApp { Name = "Remote",  Icon = "mobile-screen", Desc = "Your phone as a remote for the Hallow apps" },
             new HallowApp { Name = "Clips",   Icon = "film",          Desc = "Instant replay: save the last moments of your game" },
             new HallowApp { Name = "Keys",    Icon = "key",           Desc = "Your passwords, on your PC: an encrypted vault with browser autofill" },
+            new HallowApp { Name = "Assist",  Icon = "hand-holding-heart", Desc = "Remote help for friends and family through your own relay, with their OK" },
             new HallowApp { Name = "Toolkit", Icon = "bolt",          Desc = "One-click PC tune-up, monitoring, gaming and clean-up tools (installs as admin)" },
         };
 

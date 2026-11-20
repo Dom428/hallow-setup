@@ -1,0 +1,26 @@
+# Builds the app on every push and pull request with the same build.ps1 used at home,
+# so a change that doesn't compile shows up straight away. Nothing is released from here.
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        shell: powershell
+        run: ./build.ps1
+      - name: Keep the exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: HallowSetup
+          path: HallowSetup.exe
+          retention-days: 7

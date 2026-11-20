@@ -8,6 +8,7 @@
 | **1.1** | Install ticked (several apps in sequence, Toolkit last, updates pre-ticked); Setup updates itself (SHA-256 checked, replaces its exe after closing and reopens) |
 | **1.2** | Hallow Keys in the list (install / update with the checksum check, Start with Windows) |
 | **1.3** | Uninstall per app: a dialog that says what goes (program folder, Start menu shortcut, Start with Windows entry) and what never goes (Vault's backups, Clips' videos, Keys' vault); the app is closed through its pipe first; `Also remove my settings and data` is unticked by default; everything goes to the Recycle Bin. Hallow Toolkit: its own uninstaller is started (UAC) when it has one, otherwise Setup says how to remove it |
+| **1.4** | Hallow Assist in the list (install / update with the checksum check, Start with Windows, uninstall) |
 
 ## Next
 
