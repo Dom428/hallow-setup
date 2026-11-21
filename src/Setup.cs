@@ -99,10 +99,12 @@ namespace HallowSetup
         }
 
         static readonly JavaScriptSerializer js = new JavaScriptSerializer { MaxJsonLength = 16 * 1024 * 1024 };
-        static Dictionary<string, object> LatestRelease(HallowApp a)
+        static Dictionary<string, object> LatestRelease(HallowApp a) { return LatestReleaseOf(a.Repo); }
+        // v1.6: also used for Hallow Shield (Shield.cs)
+        public static Dictionary<string, object> LatestReleaseOf(string repo)
         {
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-            var req = (HttpWebRequest)WebRequest.Create(Api + "/repos/" + a.Repo + "/releases/latest");
+            var req = (HttpWebRequest)WebRequest.Create(Api + "/repos/" + repo + "/releases/latest");
             req.UserAgent = "HallowSetup"; req.Accept = "application/vnd.github+json"; req.Timeout = 15000;
             using (var r = req.GetResponse()) using (var rd = new StreamReader(r.GetResponseStream())) return js.Deserialize<Dictionary<string, object>>(rd.ReadToEnd());
         }

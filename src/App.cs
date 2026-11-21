@@ -3,6 +3,8 @@
 // v1.3: Uninstall per app (Uninstall.cs, UninstallDialog.cs).
 // v1.4: Hallow Assist in the list.
 // v1.5: Hallow Guard in the list.
+// v1.6: Hallow Shield (browser extension) in the list: install / update its unpacked folder, open the browsers'
+//       extension pages when you click, uninstall to the Recycle Bin (Shield.cs).
 using System;
 using System.Linq;
 using System.Reflection;
@@ -18,14 +20,14 @@ using System.Windows.Media.Imaging;
 [assembly: AssemblyTitle("Hallow Setup")]
 [assembly: AssemblyProduct("Hallow Setup")]
 [assembly: AssemblyDescription("Install and update the Hallow apps")]
-[assembly: AssemblyVersion("1.5.0.0")]
-[assembly: AssemblyFileVersion("1.5.0.0")]
+[assembly: AssemblyVersion("1.6.0.0")]
+[assembly: AssemblyFileVersion("1.6.0.0")]
 
 namespace HallowSetup
 {
     public static class Program
     {
-        public const string Version = "1.5";
+        public const string Version = "1.6";
         public static string AccentHex = "#F07820";
         [STAThread]
         public static void Main(string[] args)
@@ -64,6 +66,21 @@ namespace HallowSetup
                 try { var r = a == null ? null : Uninstaller.Uninstall(a, args[xi + 2] == "1", args[xi + 3] == "1", p => { }); res = r == null ? "no such app" : (r.StillRunning ? "STILLRUNNING " : r.Ok ? "OK " : "FAIL ") + r.Message; }
                 catch (Exception e) { res = "EXC " + e.Message; }
                 System.IO.File.WriteAllText(args[xi + 4], res); return;
+            }
+            // v1.6 developer tests only (need the HALLOW_SETUP_API stand-in and HALLOW_SETUP_LOCAL): Hallow Shield
+            int hi = Array.IndexOf(args, "--test-shield");   // --test-shield <chrome|firefox|versions|uninstall|open> <out>
+            if (hi >= 0 && hi + 2 < args.Length && Setup.TestMode)
+            {
+                string res; var what = args[hi + 1];
+                try
+                {
+                    if (what == "versions") { Shield.CheckLatest(); res = "latest=" + Setup.Show(Shield.Latest) + " installed=" + Setup.Show(Shield.InstalledVersion("chrome")) + " update=" + Shield.UpdateAvailable("chrome"); }
+                    else if (what == "uninstall") res = Shield.Uninstall("chrome");
+                    else if (what == "open") { string copied = null; res = string.Join("\n", Shield.Browsers.Select(b => Shield.OpenExtensions(b, t => copied = t, false) + " | copied=" + copied)); }
+                    else res = Shield.Install(what, p => { });
+                }
+                catch (Exception e) { res = "EXC " + e.Message; }
+                System.IO.File.WriteAllText(args[hi + 2], res); return;
             }
             int si = Array.IndexOf(args, "--snap");
             if (si >= 0 && si + 1 < args.Length) { Snap.On = true; new MainWindow().SnapAll(args[si + 1]); return; }
@@ -123,6 +140,7 @@ namespace HallowSetup
         {
             rows.Children.Clear();
             foreach (var a in Setup.Apps) rows.Children.Add(Row(a));
+            rows.Children.Add(ShieldRow());
             UpdateTickedButton();
             if (selfBtn != null) { selfBtn.Visibility = Setup.SelfNewer() ? Visibility.Visible : Visibility.Collapsed; selfBtn.Content = "Update Hallow Setup to " + Setup.Show(Setup.Self.Latest); selfBtn.IsEnabled = !busy; }
         }
@@ -211,12 +229,105 @@ namespace HallowSetup
         }
         void Say(string text, bool bad) { status.Text = text; status.Foreground = bad ? B("#F0BE5A") : B("#6ED28C"); }
 
+        // ---- v1.6: Hallow Shield, the browser extension: its unpacked folder, and the steps to load it in a browser
+        bool shieldSteps;
+        UIElement ShieldRow()
+        {
+            var card = new Border { Background = (Brush)FindResource("Panel"), CornerRadius = new CornerRadius(10), Padding = new Thickness(14, 10, 14, 10), Margin = new Thickness(0, 0, 0, 8) };
+            var outer = new StackPanel();
+            var dp = new DockPanel();
+            var spacer = new Border { Width = 16, Margin = new Thickness(0, 0, 12, 0) };   // lines up with the tick boxes above
+            DockPanel.SetDock(spacer, Dock.Left); dp.Children.Add(spacer);
+            var icon = Icons.Make("shield-halved", 24, B(Program.AccentHex)); icon.Margin = new Thickness(0, 0, 14, 0); icon.VerticalAlignment = VerticalAlignment.Center;
+            DockPanel.SetDock(icon, Dock.Left); dp.Children.Add(icon);
+            var installed = Shield.Installed("chrome"); var iv = Shield.InstalledVersion("chrome"); var upd = Shield.UpdateAvailable("chrome");
+            var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            if (installed)
+            {
+                var how = new Button { Content = shieldSteps || Shield.JustInstalled ? "Hide steps" : "Load in browser", Style = (Style)FindResource("Btn"), Margin = new Thickness(0, 0, 8, 0), IsEnabled = !busy, ToolTip = "How to load the folder in Chrome, Edge or Brave" };
+                how.Click += (s, e) => { var open = shieldSteps || Shield.JustInstalled; shieldSteps = !open; Shield.JustInstalled = false; Refresh(); };
+                right.Children.Add(how);
+            }
+            string label; bool enabled = !busy;
+            if (!installed) label = "Install";
+            else if (upd) label = "Update";
+            else if (Shield.Latest != null && iv != null && !(Shield.Latest > iv)) { label = "Up to date"; enabled = false; }
+            else label = "Reinstall";
+            var btn = new Button { Content = label, Style = (Style)FindResource(label == "Install" || label == "Update" ? "Accent" : "Btn"), MinWidth = 108, IsEnabled = enabled };
+            btn.Click += (s, e) => InstallShield("chrome");
+            right.Children.Add(btn);
+            if (installed)
+            {
+                var un = new Button { Content = "Uninstall", Tag = "icon", Style = (Style)FindResource("Btn"), Margin = new Thickness(8, 0, 0, 0), Padding = new Thickness(10, 7, 10, 7), IsEnabled = !busy, ToolTip = "Move Hallow Shield's folder to the Recycle Bin" };
+                un.Click += (s, e) => UninstallShield();
+                right.Children.Add(un);
+            }
+            DockPanel.SetDock(right, Dock.Right); dp.Children.Add(right);
+            var mid = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
+            var name = new TextBlock { FontSize = 14 }; name.Inlines.Add(new System.Windows.Documents.Run("Hallow Shield (browser extension)") { FontWeight = FontWeights.SemiBold });
+            name.Inlines.Add(new System.Windows.Documents.Run(!installed ? "  Not installed" : "  " + Setup.Show(iv)) { Foreground = installed ? (Brush)FindResource("Muted") : B("#F0BE5A"), FontSize = 12 });
+            if (upd) name.Inlines.Add(new System.Windows.Documents.Run("  -  " + Setup.Show(Shield.Latest) + " is out") { Foreground = B("#6ED28C"), FontSize = 12 });
+            else if (Shield.Latest != null && !installed) name.Inlines.Add(new System.Windows.Documents.Run("  -  latest " + Setup.Show(Shield.Latest)) { Foreground = (Brush)FindResource("Muted"), FontSize = 12 });
+            mid.Children.Add(name);
+            mid.Children.Add(new TextBlock { Text = "Ad, tracker and cookie-banner blocker for Chrome, Edge and Brave - unpacked into " + Shield.Dir("chrome"), Foreground = (Brush)FindResource("Muted"), TextWrapping = TextWrapping.Wrap });
+            dp.Children.Add(mid);
+            outer.Children.Add(dp);
+            if (installed && (shieldSteps || Shield.JustInstalled)) outer.Children.Add(ShieldSteps());
+            card.Child = outer; return card;
+        }
+        UIElement ShieldSteps()
+        {
+            var sp = new StackPanel { Margin = new Thickness(56, 10, 0, 2) };
+            sp.Children.Add(new TextBlock { Text = "Load it in your browser (once):", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
+            sp.Children.Add(new TextBlock { Text = "1.  Open the browser's extensions page:", Foreground = (Brush)FindResource("Muted") });
+            var wrap = new WrapPanel { Margin = new Thickness(18, 4, 0, 6) };
+            foreach (var b in Shield.Browsers)
+            {
+                var br = b; var btn = new Button { Content = "Open " + b.Name + " extensions", Style = (Style)FindResource("Btn"), Margin = new Thickness(0, 0, 8, 4), ToolTip = "Starts " + b.Name + " with " + b.Url + " (and copies the address)" };
+                btn.Click += (s, e) => { var m = Shield.OpenExtensions(br, t => Clipboard.SetText(t)); Say(m, m.Contains("isn't installed") || m.StartsWith("Couldn't")); };
+                wrap.Children.Add(btn);
+            }
+            sp.Children.Add(wrap);
+            var line2 = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
+            var copy = new Button { Content = "Copy folder path", Style = (Style)FindResource("Btn"), ToolTip = Shield.Dir("chrome") };
+            copy.Click += (s, e) => { try { Clipboard.SetText(Shield.Dir("chrome")); Say("Copied " + Shield.Dir("chrome") + " - paste it into the Load unpacked folder picker.", false); } catch (Exception ex) { Say("Couldn't copy: " + ex.Message, true); } };
+            DockPanel.SetDock(copy, Dock.Right); line2.Children.Add(copy);
+            line2.Children.Add(new TextBlock { Text = "2.  " + Shield.Steps, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) });
+            sp.Children.Add(line2);
+            sp.Children.Add(new TextBlock { Text = "Shield keeps its settings, My filters and stats in the browser, not in this folder, so updating replaces the folder safely.", Foreground = (Brush)FindResource("Muted"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 6) });
+            // Firefox: secondary (it only keeps an unsigned add-on until it restarts)
+            var ff = new DockPanel();
+            var ffBtn = new Button { Content = Shield.Installed("firefox") ? "Update the Firefox copy" : "Get the Firefox copy", Style = (Style)FindResource("Btn"), IsEnabled = !busy, ToolTip = Shield.Dir("firefox") };
+            ffBtn.Click += (s, e) => InstallShield("firefox");
+            DockPanel.SetDock(ffBtn, Dock.Right); ff.Children.Add(ffBtn);
+            ff.Children.Add(new TextBlock { Text = Shield.FirefoxSteps, Foreground = (Brush)FindResource("Muted"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) });
+            sp.Children.Add(ff);
+            return sp;
+        }
+        void InstallShield(string browser)
+        {
+            if (busy) return;
+            busy = true; Refresh(); checkBtn.IsEnabled = false;
+            new Thread(() =>
+            {
+                string msg; bool ok;
+                try { msg = Shield.Install(browser, p => Dispatcher.BeginInvoke(new Action(() => { status.Text = p; status.Foreground = (Brush)FindResource("Muted"); }))); ok = msg.Contains(" is in ") || msg.Contains("test run"); }
+                catch (Exception e) { msg = "Install failed: " + e.Message; ok = false; }
+                Dispatcher.BeginInvoke(new Action(() => { busy = false; checkBtn.IsEnabled = true; if (ok && browser == "chrome") shieldSteps = true; Refresh(); Say(msg + (ok && browser == "chrome" ? " Now load it in your browser - the steps are below." : ""), !ok); }));
+            }) { IsBackground = true }.Start();
+        }
+        void UninstallShield()
+        {
+            if (busy || MessageBox.Show(this, "Move Hallow Shield's folder (" + Shield.Dir("chrome") + ") to the Recycle Bin?\n\nThe browser can't load Shield without it: remove Shield's card on the extensions page too. Your Shield settings live in the browser and stay there until you remove the card.", "Uninstall Hallow Shield", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+            var m = Shield.Uninstall("chrome"); shieldSteps = false; Refresh(); Say(m, !m.Contains("Recycle Bin."));
+        }
+
         void Check()
         {
             if (busy) return; busy = true; checkBtn.IsEnabled = false; Say("Checking GitHub for the newest versions...", false); status.Foreground = (Brush)FindResource("Muted");
             new Thread(() =>
             {
-                Setup.CheckLatest(); Setup.CheckSelf();
+                Setup.CheckLatest(); Setup.CheckSelf(); Shield.CheckLatest();
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
                     foreach (var a in Setup.Apps) if (a.UpdateAvailable) a.Ticked = true;   // updates are ticked for Install ticked
@@ -226,7 +337,7 @@ namespace HallowSetup
         }
         void Summary()
         {
-            var known = Setup.Apps.Count(x => x.Latest != null); var upd = Setup.Apps.Count(x => x.UpdateAvailable);
+            var known = Setup.Apps.Count(x => x.Latest != null); var upd = Setup.Apps.Count(x => x.UpdateAvailable) + (Shield.UpdateAvailable("chrome") ? 1 : 0);
             if (known == 0) Say("Couldn't reach GitHub - versions shown are the ones on this PC.", true);
             else Say(upd == 0 ? "Everything installed is up to date." : upd + " update" + (upd == 1 ? "" : "s") + " available.", false);
         }
@@ -290,9 +401,11 @@ namespace HallowSetup
 
         public void SnapAll(string dir)
         {
-            if (Setup.TestMode) { Setup.CheckLatest(); Setup.CheckSelf(); foreach (var a in Setup.Apps) a.Ticked = a.UpdateAvailable || !a.Installed && !a.IsToolkit; }   // only against the test stand-in, never GitHub
+            if (Setup.TestMode) { Setup.CheckLatest(); Setup.CheckSelf(); Shield.CheckLatest(); foreach (var a in Setup.Apps) a.Ticked = a.UpdateAvailable || !a.Installed && !a.IsToolkit; }   // only against the test stand-in, never GitHub
             Refresh(); if (Setup.TestMode) Summary(); else Say("Snapshot - versions on this PC only.", false);
             Snap.Save(this, System.IO.Path.Combine(dir, "main.png"), 760, 0);
+            // v1.6: the Shield row with its "load it in your browser" steps
+            if (Shield.Installed("chrome")) { Shield.JustInstalled = true; Refresh(); Say("Hallow Shield " + Setup.Show(Shield.InstalledVersion("chrome")) + " for Chrome / Edge / Brave is in " + Shield.Dir("chrome") + ".", false); Snap.Save(this, System.IO.Path.Combine(dir, "shield.png"), 760, 0); Shield.JustInstalled = false; }
             foreach (var a in Setup.Apps.Where(x => x.Installed && !x.IsToolkit))   // v1.3: the uninstall dialog (nothing is removed)
             { CheckBox data; Snap.Save(UninstallDialog.Build(null, a, out data), System.IO.Path.Combine(dir, "uninstall-" + a.Name + ".png"), 540, 0); }
         }
