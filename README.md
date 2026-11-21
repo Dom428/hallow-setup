@@ -1,6 +1,6 @@
 # Hallow Setup
 
-One window to install, update, start and uninstall the Hallow family - [Hallow Mixer](https://github.com/Dom428/hallow-mixer), [Hallow Hub](https://github.com/Dom428/hallow-hub), [Hallow Vault](https://github.com/Dom428/hallow-vault), [Hallow Overlay](https://github.com/Dom428/hallow-overlay), [Hallow Remote](https://github.com/Dom428/hallow-remote), [Hallow Clips](https://github.com/Dom428/hallow-clips), [Hallow Keys](https://github.com/Dom428/hallow-keys), [Hallow Assist](https://github.com/Dom428/hallow-assist), [Hallow Guard](https://github.com/Dom428/hallow-guard) and [Hallow Toolkit](https://github.com/Dom428/hallow-toolkit) - plus the [Hallow Shield](https://github.com/Dom428/hallow-shield) browser extension.
+One window to install, update, start and uninstall the Hallow family - [Hallow Mixer](https://github.com/Dom428/hallow-mixer), [Hallow Hub](https://github.com/Dom428/hallow-hub), [Hallow Vault](https://github.com/Dom428/hallow-vault), [Hallow Overlay](https://github.com/Dom428/hallow-overlay), [Hallow Remote](https://github.com/Dom428/hallow-remote), [Hallow Clips](https://github.com/Dom428/hallow-clips), [Hallow Keys](https://github.com/Dom428/hallow-keys), [Hallow Assist](https://github.com/Dom428/hallow-assist), [Hallow Guard](https://github.com/Dom428/hallow-guard), [Hallow Tasks](https://github.com/Dom428/hallow-tasks) and [Hallow Toolkit](https://github.com/Dom428/hallow-toolkit) - plus the [Hallow Shield](https://github.com/Dom428/hallow-shield) browser extension.
 
 - A checklist of every Hallow app with its own icon: what it does, the version on your PC and the newest one on GitHub
 - **Install / Update** per app: nothing is downloaded until you click. The release zip is checked against the SHA-256 checksum GitHub publishes for it (no checksum or a mismatch = not installed), unpacked to a temp folder, and the app's own `Install.ps1` runs as you - never as admin
@@ -17,6 +17,7 @@ Built with the C# compiler that ships with Windows (.NET Framework 4.8): run `bu
 
 ## What's new
 
+- **1.9** - Hallow Tasks (a better Task Manager, no admin) is in the list: install / update with the checksum check, Start with Windows and uninstall (the dialog says that startup entries Tasks disabled stay in its backup key).
 - **1.8** - The window fits your screen: never taller than the screen's working area (taskbar left out) and kept on it, the app list scrolls, and the Shield steps scroll into view when they open (they were cut off below a 1080p screen). Hallow Shield 1.6: its Hallow family bridge is registered after unpacking, and the steps say what the new fixed extension ID means for an update from 1.5.
 - **1.7** - New app icon: a box with a download arrow, in the Hallow family style. Every app in the list (and Hallow Shield) now shows its own app icon instead of a plain symbol.
 - **1.6** - Hallow Shield, the browser extension, is in the list: install / update its folder with the checksum check, buttons to open Chrome's, Edge's or Brave's extensions page and copy the folder path, and uninstall to the Recycle Bin.

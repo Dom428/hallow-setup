@@ -131,6 +131,7 @@ namespace HallowSetup
             if (a.Name == "Clips") return "Your saved clips are never touched" + (kept != null && kept.Count > 0 ? " (" + kept[0] + ")." : ".");
             if (a.Name == "Keys") return "Your password vault is never touched (" + DataDir(a) + ").";
             if (a.Name == "Guard") return "Startup entries you disabled with Hallow Guard stay in its backup (HKCU\\Software\\HallowGuard) - reinstall Hallow Guard to put them back.";
+            if (a.Name == "Tasks") return "Startup entries you disabled with Hallow Tasks stay in its backup (HKCU\\Software\\HallowTasks) - reinstall Hallow Tasks to put them back.";
             return null;
         }
         public static string[] Shortcuts(HallowApp a) { return new[] { Path.Combine(StartMenu, a.Title + ".lnk"), Path.Combine(Desktop, a.Title + ".lnk") }; }

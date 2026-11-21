@@ -1,5 +1,5 @@
 ﻿// Hallow Setup - one window to install, update and start-with-Windows the Hallow family:
-// Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard and Toolkit. Nothing is downloaded until you click Install or Update.
+// Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks and Toolkit. Nothing is downloaded until you click Install or Update.
 // v1.3: Uninstall per app (Uninstall.cs, UninstallDialog.cs).
 // v1.4: Hallow Assist in the list.
 // v1.5: Hallow Guard in the list.
@@ -23,14 +23,14 @@ using System.Windows.Media.Imaging;
 [assembly: AssemblyTitle("Hallow Setup")]
 [assembly: AssemblyProduct("Hallow Setup")]
 [assembly: AssemblyDescription("Install and update the Hallow apps")]
-[assembly: AssemblyVersion("1.8.0.0")]
-[assembly: AssemblyFileVersion("1.8.0.0")]
+[assembly: AssemblyVersion("1.9.0.0")]
+[assembly: AssemblyFileVersion("1.9.0.0")]
 
 namespace HallowSetup
 {
     public static class Program
     {
-        public const string Version = "1.8";
+        public const string Version = "1.9";
         public static string AccentHex = "#F07820";
         [STAThread]
         public static void Main(string[] args)
