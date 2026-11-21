@@ -24,6 +24,10 @@ HALLOW SHIELD (BROWSER EXTENSION)
 - Shield 1.6 and newer: Setup also registers the Hallow family bridge for your user (no admin), so Hallow Hub and
   Remote can show what Shield blocked - only once you turn on "Share counts with Hallow apps on this PC" in Shield.
 
+WHAT'S NEW IN 1.12
+- Light mode readability fixes: with a violet or other mid-tone accent, the filled buttons (Install, Update,
+  Uninstall) use a slightly darker accent with white text, so their labels are easy to read.
+
 WHAT'S NEW IN 1.11
 - Hallow Browser (a fast Chromium browser for gamers with Hallow Shield built in) is in the list.
   Setup never makes it your default browser.

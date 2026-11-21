@@ -129,7 +129,22 @@ namespace HallowSetup
                 xaml = Regex.Replace(xaml, "(Property=\"BorderBrush\" Value=\")#F07820", "${1}" + txt, RegexOptions.IgnoreCase);
                 for (int i = 0; i < Map.GetLength(0); i++) xaml = Regex.Replace(xaml, Regex.Escape(Map[i, 0]), Map[i, 1], RegexOptions.IgnoreCase);
             }
-            // filled buttons keep the real accent (with dark text)
+            if (light)
+            {
+                // v1.12: filled accent buttons follow the family light fill rule (LightFill / FillText / FillHover): violet and
+                // other mid / dark accents get a darkened fill with white text instead of dark text below 4.5:1
+                string fill = LightFill(acc), ft = FillText(fill), fh = FillHover(fill);
+                var accStyle = new Regex("(<Style x:Key=\"Accent\"[^>]*>)\\s*<Setter Property=\"Background\" Value=\"#F07820\"/>\\s*<Setter Property=\"BorderBrush\" Value=\"#F59A50\"/>\\s*<Setter Property=\"Foreground\" Value=\"#1A0E04\"/>(.*?)</Style>", RegexOptions.Singleline);
+                if (!accStyle.IsMatch(xaml)) throw new InvalidOperationException("Theme.xaml: Accent style not found");
+                xaml = accStyle.Replace(xaml, m => m.Groups[1].Value +
+                    "<Style.Resources><SolidColorBrush x:Key=\"HoverTint\" Color=\"Transparent\"/></Style.Resources>" +
+                    "<Setter Property=\"Background\" Value=\"" + fill + "\"/><Setter Property=\"BorderBrush\" Value=\"" + fill + "\"/><Setter Property=\"Foreground\" Value=\"" + ft + "\"/>" +
+                    m.Groups[2].Value + "<Style.Triggers><Trigger Property=\"IsMouseOver\" Value=\"True\"><Setter Property=\"Background\" Value=\"" + fh + "\"/><Setter Property=\"BorderBrush\" Value=\"" + fh + "\"/></Trigger></Style.Triggers></Style>", 1);
+                // the other buttons keep the black hover/press overlay; the filled accent uses its hover fill instead (no overlay)
+                xaml = xaml.Replace("x:Name=\"hl\" Background=\"#000000\"", "x:Name=\"hl\" Background=\"{DynamicResource HoverTint}\"");
+                xaml = xaml.Replace("<Style x:Key=\"Btn\" TargetType=\"ButtonBase\">", "<SolidColorBrush x:Key=\"HoverTint\" Color=\"#000000\"/>\r\n    <Style x:Key=\"Btn\" TargetType=\"ButtonBase\">");
+            }
+            // filled buttons keep the real accent (dark mode, and the rest of the accent uses)
             return Regex.Replace(xaml, "#F07820", acc, RegexOptions.IgnoreCase);
         }
 
@@ -161,6 +176,45 @@ namespace HallowSetup
             while (Contrast(cur, bg) < 4.5 && l > 0) { l = Math.Max(0, l - 0.005); cur = FromHsl(h, s, l); }
             return cur;
         }
+        // ---- v1.12: the family light accent rule, exactly as Hallow Toolkit 5.16 (HallowFamily.ps1 Get-LightTextAccent,
+        // Get-AccentFillText, Get-LightAccentFill; HallowToolkit.ps1 AccentFillHover) ----
+        // darken(accent, min, on): HSL from System.Drawing (hue / saturation kept), lightness down 0.01 a step until >= min on "on"
+        public static string Darken(string accent, double min, string on)
+        {
+            if (Contrast(accent, on) >= min) return accent;
+            var c = System.Drawing.ColorTranslator.FromHtml(accent);
+            double h = c.GetHue() / 360.0, s = c.GetSaturation(), l = c.GetBrightness();
+            var cur = accent;
+            while (l > 0)
+            {
+                l = Math.Max(0.0, l - 0.01); cur = HslRound(h, s, l);
+                if (Contrast(cur, on) >= min) break;
+            }
+            return cur;
+        }
+        static string HslRound(double h, double s, double l)
+        {
+            Func<double, string> x = v => ((int)Math.Round(255 * v)).ToString("X2");
+            if (s == 0) return "#" + x(l) + x(l) + x(l);
+            double q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+            return "#" + x(Hue(p, q, h + 1.0 / 3)) + x(Hue(p, q, h)) + x(Hue(p, q, h - 1.0 / 3));
+        }
+        // text on a filled accent: whichever of #1E1A26 / white reads better
+        public static string FillText(string fill) { return Contrast(fill, "#1E1A26") >= Contrast(fill, "#FFFFFF") ? "#1E1A26" : "#FFFFFF"; }
+        // light filled accent: the real accent, unless neither text colour reaches 4.5:1 on it (e.g. violet) - then darkened for white text
+        public static string LightFill(string accent) { return Contrast(accent, FillText(accent)) >= 4.5 ? accent : Darken(accent, 4.5, "#FFFFFF"); }
+        // its hover: 0.9 of each channel (as Toolkit); if that takes dark text under 4.5:1 (e.g. pink #EC4899, blue #3B82F6)
+        // the hover lightens by 10 % instead, so the text still reads
+        public static string FillHover(string fill)
+        {
+            var c = System.Drawing.ColorTranslator.FromHtml(fill);
+            Func<int, string> x = v => ((int)Math.Round(v * 0.9)).ToString("X2");
+            var dark = "#" + x(c.R) + x(c.G) + x(c.B);
+            if (Contrast(FillText(fill), dark) >= 4.5) return dark;
+            Func<int, string> y = v => ((int)Math.Round(v + (255 - v) * 0.1)).ToString("X2");
+            return "#" + y(c.R) + y(c.G) + y(c.B);
+        }
+
         static string FromHsl(double h, double s, double l)
         {
             if (s == 0) return Hex(l, l, l);

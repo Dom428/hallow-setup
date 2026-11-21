@@ -8,7 +8,7 @@ using System.Text.RegularExpressions;
 
 namespace HallowSetup.Tests
 {
-    public static class Run
+    public static partial class Run
     {
         static int pass, fail;
         static void Ok(bool c, string name) { if (c) { pass++; Console.WriteLine("ok   " + name); } else { fail++; Console.WriteLine("FAIL " + name); } }
@@ -16,7 +16,7 @@ namespace HallowSetup.Tests
         public static int Main()
         {
             var tmp = Path.Combine(Path.GetTempPath(), "hallow-setup-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(tmp);
-            try { Mode(tmp); Files(tmp); Colours(); ThemeXaml(); NoHardCoded(); }
+            try { Mode(tmp); Files(tmp); Colours(); ThemeXaml(); NoHardCoded(); LightContrast(); }
             catch (Exception e) { fail++; Console.WriteLine("FAIL exception " + e); }
             finally { try { Directory.Delete(tmp, true); } catch { } }
             Console.WriteLine(pass + " passed, " + fail + " failed");
@@ -126,9 +126,9 @@ namespace HallowSetup.Tests
             for (int i = 0; i < Look.Map.GetLength(0); i++) Ok(l.IndexOf(Look.Map[i, 0], StringComparison.OrdinalIgnoreCase) < 0, "light theme has no dark " + Look.Map[i, 0]);
             Ok(l.Contains("#8B5CF6"), "light theme keeps the real accent for filled buttons");
             Ok(l.Contains("CaretBrush\" Value=\"" + Look.ForText("#8B5CF6", "#FFFFFF")), "light theme caret uses the darkened accent");
-            Ok(l.Contains("x:Name=\"hl\" Background=\"#000000\""), "light theme hover overlay darkens");
+            Ok(l.Contains("x:Name=\"hl\" Background=\"{DynamicResource HoverTint}\"") && l.Contains("<SolidColorBrush x:Key=\"HoverTint\" Color=\"#000000\"/>"), "light theme hover overlay darkens");
             // every colour left is from the light palette, the accent, or a known safe one
-            var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "#FFFFFF", "#000000", "#1A0E04", "#F59A50", "#8B5CF6", Look.ForText("#8B5CF6", "#FFFFFF") };
+            var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "#FFFFFF", "#000000", "#1A0E04", "#F59A50", "#8B5CF6", Look.ForText("#8B5CF6", "#FFFFFF"), Look.LightFill("#8B5CF6"), Look.FillHover(Look.LightFill("#8B5CF6")) };
             for (int i = 0; i < Look.Map.GetLength(0); i++) allowed.Add(Look.Map[i, 1]);
             var stray = Regex.Matches(l, "#[0-9A-Fa-f]{6}\\b").Cast<Match>().Select(m => m.Value).Where(v => !allowed.Contains(v)).Distinct().ToList();
             Ok(stray.Count == 0, "no hard-coded colours left in the light theme" + (stray.Count > 0 ? ": " + string.Join(" ", stray) : ""));

@@ -25,14 +25,14 @@ using System.Windows.Media.Imaging;
 [assembly: AssemblyTitle("Hallow Setup")]
 [assembly: AssemblyProduct("Hallow Setup")]
 [assembly: AssemblyDescription("Install and update the Hallow apps")]
-[assembly: AssemblyVersion("1.11.0.0")]
-[assembly: AssemblyFileVersion("1.11.0.0")]
+[assembly: AssemblyVersion("1.12.0.0")]
+[assembly: AssemblyFileVersion("1.12.0.0")]
 
 namespace HallowSetup
 {
     public static class Program
     {
-        public const string Version = "1.11";
+        public const string Version = "1.12";
         public static string AccentHex = "#F07820";
         static string ThemeXaml;
         // v1.10: Theme.xaml in light or dark with the Hallow accent picked in Hallow Toolkit (if any)

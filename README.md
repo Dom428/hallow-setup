@@ -18,6 +18,7 @@ Built with the C# compiler that ships with Windows (.NET Framework 4.8): run `bu
 
 ## What's new
 
+- **1.12** - Light mode readability fixes: with a violet or other mid-tone accent, the filled buttons (Install, Update, Install ticked, Uninstall) now use a slightly darker shade of the accent with white text, instead of dark text that was hard to read; a dark accent (e.g. navy) gets white text too. Same rule as Hallow Toolkit. Dark mode is unchanged.
 - **1.11** - Hallow Browser (a fast Chromium browser for gamers with Hallow Shield built in) is in the list: install / update with the checksum check and uninstall (it asks nothing about Start with Windows - the browser only runs while its window is open; uninstall also removes its "a browser you can pick" registration, and its browsing data only when you tick the data box). Setup never makes it your default browser.
 - **1.10** - Light and dark mode. Setup follows the mode picked in Hallow Toolkit (Light, Dark or Same as Windows - it switches live when Windows does), or pick its own **Look** at the bottom right: Follow Hallow, Light or Dark. The light look uses the family's light palette, a darker shade of your accent for text so it stays readable, and a light title bar.
 - **1.9** - Hallow Tasks (a better Task Manager, no admin) is in the list: install / update with the checksum check, Start with Windows and uninstall (the dialog says that startup entries Tasks disabled stay in its backup key).
