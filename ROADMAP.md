@@ -11,6 +11,7 @@
 | **1.4** | Hallow Assist in the list (install / update with the checksum check, Start with Windows, uninstall) |
 | **1.5** | Hallow Guard in the list (install / update with the checksum check, Start with Windows, uninstall; the uninstall dialog says that startup entries Guard disabled stay in its backup key) |
 | **1.6** | Hallow Shield (browser extension) in the list: latest release vs. the version in `%LOCALAPPDATA%\Hallow Shield\chrome` (`version.json`, or `manifest.json` for 1.2 and older); Install / Update downloads `hallow-shield-chrome-<v>.zip` only when clicked, refuses it without a matching GitHub SHA-256 digest, and replaces the folder (moved aside first, put back if anything fails); steps with **Open Chrome / Edge / Brave extensions** (started only on click, address copied too), **Copy folder path**, the Load unpacked steps; an optional Firefox copy; Uninstall to the Recycle Bin; tests: version compare, digest parsing and the SHA-256 check, a 1.2 copy read from manifest.json, bad / missing digest and a missing asset refused, dry run, update replacing old files, uninstall - all against a local stand-in for GitHub; `--snap` pictures |
+| **1.7** | New app icon (box + download arrow) in the family style, every size drawn on its own (16-256 px); the list shows each app's own icon (64 px PNGs built into the exe, drawn at 32 px; the Font Awesome glyph if one is missing), including the new Hallow Guard, Assist, Remote and Shield icons |
 
 ## Next
 

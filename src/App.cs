@@ -20,14 +20,14 @@ using System.Windows.Media.Imaging;
 [assembly: AssemblyTitle("Hallow Setup")]
 [assembly: AssemblyProduct("Hallow Setup")]
 [assembly: AssemblyDescription("Install and update the Hallow apps")]
-[assembly: AssemblyVersion("1.6.0.0")]
-[assembly: AssemblyFileVersion("1.6.0.0")]
+[assembly: AssemblyVersion("1.7.0.0")]
+[assembly: AssemblyFileVersion("1.7.0.0")]
 
 namespace HallowSetup
 {
     public static class Program
     {
-        public const string Version = "1.6";
+        public const string Version = "1.7";
         public static string AccentHex = "#F07820";
         [STAThread]
         public static void Main(string[] args)
@@ -185,7 +185,7 @@ namespace HallowSetup
             var tick = new CheckBox { IsChecked = a.Ticked, IsEnabled = !busy, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0), ToolTip = "Include in Install ticked" };
             tick.Click += (s, e) => { a.Ticked = tick.IsChecked == true; UpdateTickedButton(); };
             DockPanel.SetDock(tick, Dock.Left); dp.Children.Add(tick);
-            var icon = Icons.Make(a.Icon, 24, B(Program.AccentHex)); icon.Margin = new Thickness(0, 0, 14, 0); icon.VerticalAlignment = VerticalAlignment.Center;
+            var icon = AppIconFor(a.Name, a.Icon); icon.Margin = new Thickness(0, 0, 12, 0); icon.VerticalAlignment = VerticalAlignment.Center;
             DockPanel.SetDock(icon, Dock.Left); dp.Children.Add(icon);
             var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
             var installed = a.Installed; var iv = a.InstalledVersion;
@@ -227,6 +227,26 @@ namespace HallowSetup
             dp.Children.Add(mid);
             card.Child = dp; return card;
         }
+        // v1.7: each app's own icon (64 px PNGs built in), or its Font Awesome glyph if one is missing
+        static readonly System.Collections.Generic.Dictionary<string, ImageSource> appIcons = new System.Collections.Generic.Dictionary<string, ImageSource>();
+        static FrameworkElement AppIconFor(string name, string fa)
+        {
+            ImageSource src;
+            if (!appIcons.TryGetValue(name, out src))
+            {
+                try
+                {
+                    using (var st = Assembly.GetExecutingAssembly().GetManifestResourceStream("HallowSetup.icon." + name.ToLowerInvariant() + ".png"))
+                        if (st != null) { var bi = new BitmapImage(); bi.BeginInit(); bi.CacheOption = BitmapCacheOption.OnLoad; bi.StreamSource = st; bi.EndInit(); bi.Freeze(); src = bi; }
+                }
+                catch { src = null; }
+                appIcons[name] = src;
+            }
+            if (src == null) return Icons.Make(fa, 24, B(Program.AccentHex));
+            var img = new Image { Source = src, Width = 32, Height = 32, SnapsToDevicePixels = true };
+            RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
+            return img;
+        }
         void Say(string text, bool bad) { status.Text = text; status.Foreground = bad ? B("#F0BE5A") : B("#6ED28C"); }
 
         // ---- v1.6: Hallow Shield, the browser extension: its unpacked folder, and the steps to load it in a browser
@@ -238,7 +258,7 @@ namespace HallowSetup
             var dp = new DockPanel();
             var spacer = new Border { Width = 16, Margin = new Thickness(0, 0, 12, 0) };   // lines up with the tick boxes above
             DockPanel.SetDock(spacer, Dock.Left); dp.Children.Add(spacer);
-            var icon = Icons.Make("shield-halved", 24, B(Program.AccentHex)); icon.Margin = new Thickness(0, 0, 14, 0); icon.VerticalAlignment = VerticalAlignment.Center;
+            var icon = AppIconFor("Shield", "shield-halved"); icon.Margin = new Thickness(0, 0, 12, 0); icon.VerticalAlignment = VerticalAlignment.Center;
             DockPanel.SetDock(icon, Dock.Left); dp.Children.Add(icon);
             var installed = Shield.Installed("chrome"); var iv = Shield.InstalledVersion("chrome"); var upd = Shield.UpdateAvailable("chrome");
             var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };

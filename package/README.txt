@@ -22,6 +22,9 @@ HALLOW SHIELD (BROWSER EXTENSION)
   Developer mode on -> Load unpacked -> pick that folder. After an update, click the reload arrow on Shield's card.
 - Uninstall moves the folder to the Recycle Bin; remove Shield's card in the browser yourself.
 
+WHAT'S NEW IN 1.7
+- New app icon (a box with a download arrow), and every app in the list shows its own icon.
+
 WHAT'S NEW IN 1.6
 - Hallow Shield, the browser extension, is in the list.
 
