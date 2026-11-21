@@ -5,6 +5,9 @@
 // v1.5: Hallow Guard in the list.
 // v1.6: Hallow Shield (browser extension) in the list: install / update its unpacked folder, open the browsers'
 //       extension pages when you click, uninstall to the Recycle Bin (Shield.cs).
+// v1.8: the window fits the screen: never taller than the monitor's working area and kept on it, the app list scrolls,
+//       and the Shield steps scroll into view when they open. Shield 1.6+: its Hallow family bridge is registered
+//       (per user) after Shield is unpacked (Shield.cs).
 using System;
 using System.Linq;
 using System.Reflection;
@@ -20,14 +23,14 @@ using System.Windows.Media.Imaging;
 [assembly: AssemblyTitle("Hallow Setup")]
 [assembly: AssemblyProduct("Hallow Setup")]
 [assembly: AssemblyDescription("Install and update the Hallow apps")]
-[assembly: AssemblyVersion("1.7.0.0")]
-[assembly: AssemblyFileVersion("1.7.0.0")]
+[assembly: AssemblyVersion("1.8.0.0")]
+[assembly: AssemblyFileVersion("1.8.0.0")]
 
 namespace HallowSetup
 {
     public static class Program
     {
-        public const string Version = "1.7";
+        public const string Version = "1.8";
         public static string AccentHex = "#F07820";
         [STAThread]
         public static void Main(string[] args)
@@ -93,6 +96,7 @@ namespace HallowSetup
         [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int val, int size);
         static SolidColorBrush B(string hex) { return new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)); }
         StackPanel rows; TextBlock status; Button checkBtn, tickedBtn, selfBtn; bool busy;
+        ScrollViewer scroll; FrameworkElement stepsPanel; bool scrollToSteps;
 
         public MainWindow()
         {
@@ -100,7 +104,8 @@ namespace HallowSetup
             Background = (Brush)FindResource("Bg"); Foreground = (Brush)FindResource("Text"); FontFamily = new FontFamily("Segoe UI"); FontSize = 12.5;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             try { Icon = AppIcon(); } catch { }
-            SourceInitialized += (s, e) => { int dark = 1; DwmSetWindowAttribute(new WindowInteropHelper(this).Handle, 20, ref dark, 4); };
+            SourceInitialized += (s, e) => { int dark = 1; DwmSetWindowAttribute(new WindowInteropHelper(this).Handle, 20, ref dark, 4); FitToScreen(); };
+            SizeChanged += (s, e) => KeepOnScreen();   // v1.8: taller content (the Shield steps) never pushes the window off the screen
             Content = Build(); Refresh();
             if (!Snap.On) Loaded += (s, e) => Check();
         }
@@ -112,7 +117,7 @@ namespace HallowSetup
 
         UIElement Build()
         {
-            var sp = new StackPanel { Margin = new Thickness(24, 16, 24, 18) };
+            var sp = new StackPanel();
             var title = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
             try { title.Children.Add(new Image { Source = AppIcon(), Width = 30, Height = 30, Margin = new Thickness(0, 0, 10, 0) }); } catch { }
             title.Children.Add(new TextBlock { Text = "HALLOW", FontSize = 22, FontWeight = FontWeights.Bold, Foreground = B(Program.AccentHex), VerticalAlignment = VerticalAlignment.Center });
@@ -124,16 +129,23 @@ namespace HallowSetup
             sp.Children.Add(title);
             sp.Children.Add(new TextBlock { Text = "Install, update and start the Hallow apps. Each download is checked against GitHub's checksum before its own installer runs as you.",
                 Foreground = (Brush)FindResource("Muted"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12) });
-            rows = new StackPanel(); sp.Children.Add(rows);
+            // v1.8: header, the app list (scrolls when the screen is too short for it), the buttons and the footer
+            var root = new Grid { Margin = new Thickness(24, 16, 24, 18) };
+            foreach (var h in new[] { GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto, GridLength.Auto }) root.RowDefinitions.Add(new RowDefinition { Height = h });
+            root.Children.Add(sp);
+            rows = new StackPanel();
+            scroll = new ScrollViewer { Content = rows, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Focusable = false };
+            Grid.SetRow(scroll, 1); root.Children.Add(scroll);
             var bottom = new DockPanel { Margin = new Thickness(0, 12, 0, 0) };
             checkBtn = new Button { Content = "Check for updates", Style = (Style)FindResource("Btn") }; checkBtn.Click += (s, e) => Check();
             DockPanel.SetDock(checkBtn, Dock.Right); bottom.Children.Add(checkBtn);
             tickedBtn = new Button { Content = "Install ticked", Style = (Style)FindResource("Accent"), Margin = new Thickness(0, 0, 8, 0) }; tickedBtn.Click += (s, e) => InstallTicked();
             DockPanel.SetDock(tickedBtn, Dock.Right); bottom.Children.Add(tickedBtn);
             status = new TextBlock { TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
-            bottom.Children.Add(status); sp.Children.Add(bottom);
-            sp.Children.Add(new TextBlock { Text = "Hallow Setup " + Program.Version + "  -  icons: Font Awesome Free (CC BY 4.0)", Foreground = (Brush)FindResource("Muted"), FontSize = 11, Margin = new Thickness(0, 12, 0, 0) });
-            return sp;
+            bottom.Children.Add(status); Grid.SetRow(bottom, 2); root.Children.Add(bottom);
+            var foot = new TextBlock { Text = "Hallow Setup " + Program.Version + "  -  icons: Font Awesome Free (CC BY 4.0)", Foreground = (Brush)FindResource("Muted"), FontSize = 11, Margin = new Thickness(0, 12, 0, 0) };
+            Grid.SetRow(foot, 3); root.Children.Add(foot);
+            return root;
         }
 
         void Refresh()
@@ -142,6 +154,7 @@ namespace HallowSetup
             foreach (var a in Setup.Apps) rows.Children.Add(Row(a));
             rows.Children.Add(ShieldRow());
             UpdateTickedButton();
+            if (scrollToSteps && stepsPanel != null) { scrollToSteps = false; var el = stepsPanel; Dispatcher.BeginInvoke(new Action(() => ScrollIntoView(el)), System.Windows.Threading.DispatcherPriority.Loaded); }
             if (selfBtn != null) { selfBtn.Visibility = Setup.SelfNewer() ? Visibility.Visible : Visibility.Collapsed; selfBtn.Content = "Update Hallow Setup to " + Setup.Show(Setup.Self.Latest); selfBtn.IsEnabled = !busy; }
         }
         void UpdateTickedButton()
@@ -265,7 +278,7 @@ namespace HallowSetup
             if (installed)
             {
                 var how = new Button { Content = shieldSteps || Shield.JustInstalled ? "Hide steps" : "Load in browser", Style = (Style)FindResource("Btn"), Margin = new Thickness(0, 0, 8, 0), IsEnabled = !busy, ToolTip = "How to load the folder in Chrome, Edge or Brave" };
-                how.Click += (s, e) => { var open = shieldSteps || Shield.JustInstalled; shieldSteps = !open; Shield.JustInstalled = false; Refresh(); };
+                how.Click += (s, e) => { var open = shieldSteps || Shield.JustInstalled; shieldSteps = !open; Shield.JustInstalled = false; scrollToSteps = !open; Refresh(); };
                 right.Children.Add(how);
             }
             string label; bool enabled = !busy;
@@ -292,7 +305,8 @@ namespace HallowSetup
             mid.Children.Add(new TextBlock { Text = "Ad, tracker and cookie-banner blocker for Chrome, Edge and Brave - unpacked into " + Shield.Dir("chrome"), Foreground = (Brush)FindResource("Muted"), TextWrapping = TextWrapping.Wrap });
             dp.Children.Add(mid);
             outer.Children.Add(dp);
-            if (installed && (shieldSteps || Shield.JustInstalled)) outer.Children.Add(ShieldSteps());
+            stepsPanel = null;
+            if (installed && (shieldSteps || Shield.JustInstalled)) { outer.Children.Add(ShieldSteps()); stepsPanel = card; }
             card.Child = outer; return card;
         }
         UIElement ShieldSteps()
@@ -315,6 +329,11 @@ namespace HallowSetup
             line2.Children.Add(new TextBlock { Text = "2.  " + Shield.Steps, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) });
             sp.Children.Add(line2);
             sp.Children.Add(new TextBlock { Text = "Shield keeps its settings, My filters and stats in the browser, not in this folder, so updating replaces the folder safely.", Foreground = (Brush)FindResource("Muted"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 6) });
+            // v1.8: Shield 1.6 has a fixed extension ID (for the family bridge): the browser sees it as a new extension
+            var iv = Shield.InstalledVersion("chrome");
+            if (iv != null && iv >= new Version(1, 6)) sp.Children.Add(new TextBlock { Text = "Coming from Shield 1.5 or older? 1.6 has a fixed extension ID, so the browser treats it as a new extension: remove the old Shield card, then Load unpacked again (or click reload, then remove the old card if two show). Its settings and stats start fresh - export My filters first (Shield options, My filters, Export).", Foreground = B("#F0BE5A"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
+            // v1.8: Shield 1.6+ brings the Hallow family bridge (registered for this user when Shield is unpacked)
+            if (Shield.BridgeRegistered()) sp.Children.Add(new TextBlock { Text = "The Hallow family bridge is registered: turn on \"Share counts with Hallow apps on this PC\" in Shield's options (Stats) to show what Shield blocked in Hallow Hub and Remote. It stays off until you turn it on.", Foreground = (Brush)FindResource("Muted"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
             // Firefox: secondary (it only keeps an unsigned add-on until it restarts)
             var ff = new DockPanel();
             var ffBtn = new Button { Content = Shield.Installed("firefox") ? "Update the Firefox copy" : "Get the Firefox copy", Style = (Style)FindResource("Btn"), IsEnabled = !busy, ToolTip = Shield.Dir("firefox") };
@@ -333,13 +352,62 @@ namespace HallowSetup
                 string msg; bool ok;
                 try { msg = Shield.Install(browser, p => Dispatcher.BeginInvoke(new Action(() => { status.Text = p; status.Foreground = (Brush)FindResource("Muted"); }))); ok = msg.Contains(" is in ") || msg.Contains("test run"); }
                 catch (Exception e) { msg = "Install failed: " + e.Message; ok = false; }
-                Dispatcher.BeginInvoke(new Action(() => { busy = false; checkBtn.IsEnabled = true; if (ok && browser == "chrome") shieldSteps = true; Refresh(); Say(msg + (ok && browser == "chrome" ? " Now load it in your browser - the steps are below." : ""), !ok); }));
+                Dispatcher.BeginInvoke(new Action(() => { busy = false; checkBtn.IsEnabled = true; if (ok && browser == "chrome") { shieldSteps = true; scrollToSteps = true; } Refresh(); Say(msg + (ok && browser == "chrome" ? " Now load it in your browser - the steps are below." : ""), !ok); }));
             }) { IsBackground = true }.Start();
         }
         void UninstallShield()
         {
             if (busy || MessageBox.Show(this, "Move Hallow Shield's folder (" + Shield.Dir("chrome") + ") to the Recycle Bin?\n\nThe browser can't load Shield without it: remove Shield's card on the extensions page too. Your Shield settings live in the browser and stay there until you remove the card.", "Uninstall Hallow Shield", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
             var m = Shield.Uninstall("chrome"); shieldSteps = false; Refresh(); Say(m, !m.Contains("Recycle Bin."));
+        }
+
+        // ---- v1.8: never taller than the screen, and kept on it ----
+        // the working area (taskbar left out) of the monitor the window is on, in WPF units
+        Rect WorkArea()
+        {
+            try
+            {
+                var h = new WindowInteropHelper(this).Handle;
+                var src = h == IntPtr.Zero ? null : PresentationSource.FromVisual(this);
+                if (src != null && src.CompositionTarget != null)
+                {
+                    var wa = System.Windows.Forms.Screen.FromHandle(h).WorkingArea; var m = src.CompositionTarget.TransformFromDevice;
+                    return new Rect(m.Transform(new Point(wa.Left, wa.Top)), m.Transform(new Point(wa.Right, wa.Bottom)));
+                }
+            }
+            catch { }
+            return SystemParameters.WorkArea;
+        }
+        void FitToScreen()
+        {
+            var wa = WorkArea(); MaxHeight = wa.Height;
+            var h = Math.Min(ActualHeight > 0 ? ActualHeight : wa.Height, wa.Height);
+            Top = wa.Top + (wa.Height - h) / 2; Left = Math.Max(wa.Left, wa.Left + (wa.Width - Width) / 2);
+        }
+        void KeepOnScreen()
+        {
+            if (Snap.On || WindowState != WindowState.Normal || double.IsNaN(Top) || double.IsNaN(Left)) return;
+            var wa = WorkArea(); if (MaxHeight != wa.Height) MaxHeight = wa.Height;
+            var h = ActualHeight > 0 ? ActualHeight : Height; var w = ActualWidth > 0 ? ActualWidth : Width;
+            if (Top + h > wa.Bottom) Top = Math.Max(wa.Top, wa.Bottom - h);
+            if (Top < wa.Top) Top = wa.Top;
+            if (Left + w > wa.Right) Left = Math.Max(wa.Left, wa.Right - w);
+            if (Left < wa.Left) Left = wa.Left;
+        }
+        // scrolls the list so the element (the Shield card with its steps) is in view: its bottom, and its top if it fits
+        void ScrollIntoView(FrameworkElement el)
+        {
+            try
+            {
+                if (scroll == null || el == null || !el.IsDescendantOf(rows)) return;
+                scroll.UpdateLayout();
+                var top = el.TransformToAncestor(rows).Transform(new Point(0, 0)).Y; var bottom = top + el.ActualHeight; var view = scroll.ViewportHeight;
+                var off = scroll.VerticalOffset;
+                if (bottom > off + view) off = bottom - view;
+                if (top < off) off = top;
+                scroll.ScrollToVerticalOffset(Math.Max(0, off)); scroll.UpdateLayout();
+            }
+            catch { }
         }
 
         void Check()
@@ -425,7 +493,10 @@ namespace HallowSetup
             Refresh(); if (Setup.TestMode) Summary(); else Say("Snapshot - versions on this PC only.", false);
             Snap.Save(this, System.IO.Path.Combine(dir, "main.png"), 760, 0);
             // v1.6: the Shield row with its "load it in your browser" steps
-            if (Shield.Installed("chrome")) { Shield.JustInstalled = true; Refresh(); Say("Hallow Shield " + Setup.Show(Shield.InstalledVersion("chrome")) + " for Chrome / Edge / Brave is in " + Shield.Dir("chrome") + ".", false); Snap.Save(this, System.IO.Path.Combine(dir, "shield.png"), 760, 0); Shield.JustInstalled = false; }
+            if (Shield.Installed("chrome")) { Shield.JustInstalled = true; Refresh(); Say("Hallow Shield " + Setup.Show(Shield.InstalledVersion("chrome")) + " for Chrome / Edge / Brave is in " + Shield.Dir("chrome") + ".", false); Snap.Save(this, System.IO.Path.Combine(dir, "shield.png"), 760, 0);
+                // v1.8: as on a 1920x1080 screen (1032 px working area) and a 1366x768 one (728 px), less the title bar: the list scrolls, the steps in view
+                foreach (var wa in new[] { 1032, 728 }) { var el = stepsPanel; Snap.Save(this, System.IO.Path.Combine(dir, "shield-" + wa + ".png"), 760, wa - 31, () => ScrollIntoView(el)); }
+                Shield.JustInstalled = false; }
             foreach (var a in Setup.Apps.Where(x => x.Installed && !x.IsToolkit))   // v1.3: the uninstall dialog (nothing is removed)
             { CheckBox data; Snap.Save(UninstallDialog.Build(null, a, out data), System.IO.Path.Combine(dir, "uninstall-" + a.Name + ".png"), 540, 0); }
         }

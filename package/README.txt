@@ -21,6 +21,12 @@ HALLOW SHIELD (BROWSER EXTENSION)
 - Then: Open Chrome / Edge / Brave extensions (the address is also copied, in case the browser doesn't open it),
   Developer mode on -> Load unpacked -> pick that folder. After an update, click the reload arrow on Shield's card.
 - Uninstall moves the folder to the Recycle Bin; remove Shield's card in the browser yourself.
+- Shield 1.6 and newer: Setup also registers the Hallow family bridge for your user (no admin), so Hallow Hub and
+  Remote can show what Shield blocked - only once you turn on "Share counts with Hallow apps on this PC" in Shield.
+
+WHAT'S NEW IN 1.8
+- The window always fits your screen and the app list scrolls (the Shield steps were cut off on a 1080p screen).
+- Hallow Shield 1.6: its Hallow family bridge is registered when Shield is installed or updated.
 
 WHAT'S NEW IN 1.7
 - New app icon (a box with a download arrow), and every app in the list shows its own icon.

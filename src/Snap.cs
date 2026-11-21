@@ -13,7 +13,7 @@ namespace HallowSetup
     {
         public static bool On;
 
-        public static void Save(Window win, string path, double width, double height)
+        public static void Save(Window win, string path, double width, double height, Action afterLayout = null)
         {
             var c = win.Content as UIElement; win.Content = null;
             var host = new System.Windows.Controls.Border { Background = win.Background, Child = c, Width = width };
@@ -23,6 +23,7 @@ namespace HallowSetup
             host.Measure(new Size(width, height > 0 ? height : double.PositiveInfinity));
             var sz = host.DesiredSize; if (height <= 0) host.Height = sz.Height;
             host.Arrange(new Rect(0, 0, width, host.Height)); host.UpdateLayout();
+            if (afterLayout != null) { afterLayout(); host.UpdateLayout(); }
             var bmp = new RenderTargetBitmap((int)Math.Ceiling(width), (int)Math.Ceiling(host.Height), 96, 96, PixelFormats.Pbgra32);
             bmp.Render(host);
             var enc = new PngBitmapEncoder(); enc.Frames.Add(BitmapFrame.Create(bmp));

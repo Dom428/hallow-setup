@@ -8,6 +8,11 @@
 //     the browser's own profile - so replacing it is safe; the browser picks up the new files when you click the reload
 //     arrow on Shield's card.
 //   - Uninstall: the folder goes to the Recycle Bin (remove Shield's card in the browser yourself).
+//   - v1.8, Shield 1.6+: the zip carries bridge\HallowShieldBridge.exe, the "Hallow family bridge" (a native messaging host
+//     that writes Shield's blocked counts to %APPDATA%\HallowShield\status.json for Hallow Hub / Remote, only when you
+//     turn sharing on in Shield). After unpacking, Setup runs "HallowShieldBridge.exe --install": it copies itself to
+//     %LOCALAPPDATA%\Hallow Shield\bridge and registers for Chrome, Edge, Brave and Firefox under HKCU (no admin).
+//     Uninstall runs its --uninstall and recycles that folder too.
 // Setup never opens or changes a browser by itself: "Open Chrome extensions" etc. only run when you click them.
 using System;
 using System.Collections.Generic;
@@ -107,7 +112,8 @@ namespace HallowSetup
                 var err = Replace(x, Dir(browser));
                 if (err != null) return err;
                 JustInstalled = true;
-                return "Hallow Shield " + Setup.Show(got) + " for " + who + " is in " + Dir(browser) + ".";
+                var bridge = RegisterBridge(Dir(browser), progress);
+                return "Hallow Shield " + Setup.Show(got) + " for " + who + " is in " + Dir(browser) + "." + (bridge != null ? " " + bridge : "");
             }
             finally { try { Directory.Delete(tmp, true); } catch { } }
         }
@@ -149,9 +155,53 @@ namespace HallowSetup
             var d = Dir(browser);
             if (!Directory.Exists(d)) return "Hallow Shield isn't in " + d + ".";
             if (!Uninstaller.Recycle(d)) return "Couldn't move " + d + " to the Recycle Bin (is a file in it open?).";
+            if (!Installed("firefox")) UnregisterBridge();
             try { if (Directory.Exists(Root) && !Directory.EnumerateFileSystemEntries(Root).Any()) Directory.Delete(Root); } catch { }
             JustInstalled = false;
             return "Hallow Shield's folder is in the Recycle Bin. Remove its card on your browser's extensions page too.";
+        }
+
+        // ---- v1.8: the Hallow family bridge (Shield 1.6+) ----
+        public static string BridgeHome { get { var t = Environment.GetEnvironmentVariable("HALLOW_SHIELD_BRIDGE_HOME"); return !string.IsNullOrEmpty(t) ? t : Path.Combine(Root, "bridge"); } }
+        public static string BridgeExe { get { return Path.Combine(BridgeHome, "HallowShieldBridge.exe"); } }
+        // runs a bridge exe with one argument, hidden; returns its output (null if it failed or took too long)
+        static string RunBridge(string exe, string arg)
+        {
+            try
+            {
+                var psi = new ProcessStartInfo(exe, arg) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, WindowStyle = ProcessWindowStyle.Hidden };
+                using (var p = Process.Start(psi))
+                {
+                    var o = p.StandardOutput.ReadToEndAsync(); var e = p.StandardError.ReadToEndAsync();
+                    if (!p.WaitForExit(15000)) { try { p.Kill(); } catch { } return null; }
+                    return p.ExitCode == 0 ? o.Result.Trim() : null;
+                }
+            }
+            catch { return null; }
+        }
+        // after unpacking: registers the bridge the zip brought (older zips have none: nothing to do). A sentence, or null.
+        public static string RegisterBridge(string dir, Action<string> progress)
+        {
+            var exe = Path.Combine(dir, "bridge", "HallowShieldBridge.exe");
+            if (!File.Exists(exe)) return null;
+            progress("Registering the Hallow family bridge...");
+            return RunBridge(exe, "--install") != null ? "The Hallow family bridge is registered for this user (sharing counts stays off until you turn it on in Shield)." : "The Hallow family bridge couldn't be registered - run bridge\\install-bridge.ps1 in the folder to try again.";
+        }
+        public static void UnregisterBridge()
+        {
+            if (File.Exists(BridgeExe)) RunBridge(BridgeExe, "--uninstall");
+            if (Directory.Exists(BridgeHome)) Uninstaller.Recycle(BridgeHome);
+        }
+        // is the bridge registered (Chrome's key names a manifest that exists)?
+        public static bool BridgeRegistered()
+        {
+            try
+            {
+                var t = Environment.GetEnvironmentVariable("HALLOW_SHIELD_REGROOT");
+                var key = (!string.IsNullOrEmpty(t) ? t + @"\Google\Chrome" : @"Software\Google\Chrome") + @"\NativeMessagingHosts\com.hallow.shield";
+                using (var k = Registry.CurrentUser.OpenSubKey(key)) { var v = k == null ? null : k.GetValue("") as string; return v != null && File.Exists(v); }
+            }
+            catch { return false; }
         }
 
         // ---- the browsers' extension pages: started only when you click the button ----
