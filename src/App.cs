@@ -8,6 +8,8 @@
 // v1.8: the window fits the screen: never taller than the monitor's working area and kept on it, the app list scrolls,
 //       and the Shield steps scroll into view when they open. Shield 1.6+: its Hallow family bridge is registered
 //       (per user) after Shield is unpacked (Shield.cs).
+// v1.10: light and dark mode - follows the mode picked in Hallow Toolkit (theme.json), or Setup's own Look (Follow Hallow /
+//       Light / Dark, at the bottom right); changes live (Look.cs).
 using System;
 using System.Linq;
 using System.Reflection;
@@ -23,24 +25,35 @@ using System.Windows.Media.Imaging;
 [assembly: AssemblyTitle("Hallow Setup")]
 [assembly: AssemblyProduct("Hallow Setup")]
 [assembly: AssemblyDescription("Install and update the Hallow apps")]
-[assembly: AssemblyVersion("1.9.0.0")]
-[assembly: AssemblyFileVersion("1.9.0.0")]
+[assembly: AssemblyVersion("1.10.0.0")]
+[assembly: AssemblyFileVersion("1.10.0.0")]
 
 namespace HallowSetup
 {
     public static class Program
     {
-        public const string Version = "1.9";
+        public const string Version = "1.10";
         public static string AccentHex = "#F07820";
+        static string ThemeXaml;
+        // v1.10: Theme.xaml in light or dark with the Hallow accent picked in Hallow Toolkit (if any)
+        static ResourceDictionary LoadTheme(bool light)
+        {
+            Look.Light = light; AccentHex = Setup.Accent() ?? "#F07820";
+            return (ResourceDictionary)XamlReader.Parse(Look.Theme(ThemeXaml, AccentHex, light));
+        }
+        public static void ApplyTheme(bool light)
+        {
+            var md = Application.Current.Resources.MergedDictionaries; var d = LoadTheme(light);
+            if (md.Count > 0) md[0] = d; else md.Add(d);
+        }
         [STAThread]
         public static void Main(string[] args)
         {
             var app = new Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
             string xaml;
             using (var s = Assembly.GetExecutingAssembly().GetManifestResourceStream("HallowSetup.Theme.xaml")) using (var r = new System.IO.StreamReader(s)) xaml = r.ReadToEnd();
-            var acc = Setup.Accent();   // the Hallow accent picked in Hallow Toolkit, if any
-            if (acc != null) { AccentHex = acc; xaml = xaml.Replace("#F07820", acc).Replace("#f07820", acc); }
-            app.Resources.MergedDictionaries.Add((ResourceDictionary)XamlReader.Parse(xaml));
+            ThemeXaml = xaml;
+            app.Resources.MergedDictionaries.Add(LoadTheme(Look.CurrentLight()));   // v1.10: light or dark, and the Hallow accent
             int ti = Array.IndexOf(args, "--test-install");   // developer tests only (needs the HALLOW_SETUP_API stand-in): install one app, write the result to a file
             if (ti >= 0 && ti + 2 < args.Length && Setup.TestMode)
             {
@@ -86,7 +99,11 @@ namespace HallowSetup
                 System.IO.File.WriteAllText(args[hi + 2], res); return;
             }
             int si = Array.IndexOf(args, "--snap");
-            if (si >= 0 && si + 1 < args.Length) { Snap.On = true; new MainWindow().SnapAll(args[si + 1]); return; }
+            if (si >= 0 && si + 1 < args.Length)   // v1.10: every window in dark (the folder) and light (its "light" subfolder)
+            {
+                Snap.On = true; ApplyTheme(false); var sw = new MainWindow(); sw.SnapAll(args[si + 1]);
+                sw.Redraw(true); sw.SnapAll(System.IO.Path.Combine(args[si + 1], "light")); return;   // the same window switched live
+            }
             var w = new MainWindow(); app.Run(w);
         }
     }
@@ -104,10 +121,15 @@ namespace HallowSetup
             Background = (Brush)FindResource("Bg"); Foreground = (Brush)FindResource("Text"); FontFamily = new FontFamily("Segoe UI"); FontSize = 12.5;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             try { Icon = AppIcon(); } catch { }
-            SourceInitialized += (s, e) => { int dark = 1; DwmSetWindowAttribute(new WindowInteropHelper(this).Handle, 20, ref dark, 4); FitToScreen(); };
+            SourceInitialized += (s, e) => { Look.TitleBar(this); FitToScreen(); };
             SizeChanged += (s, e) => KeepOnScreen();   // v1.8: taller content (the Shield steps) never pushes the window off the screen
             Content = Build(); Refresh();
             if (!Snap.On) Loaded += (s, e) => Check();
+            if (!Snap.On)   // v1.10: light / dark (and the accent) change live: theme.json, Setup's Look and Windows' setting, checked every 2 s
+            {
+                var tm = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+                tm.Tick += (s, e) => Retheme(false); tm.Start();
+            }
         }
         static ImageSource AppIcon()
         {
@@ -120,7 +142,7 @@ namespace HallowSetup
             var sp = new StackPanel();
             var title = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
             try { title.Children.Add(new Image { Source = AppIcon(), Width = 30, Height = 30, Margin = new Thickness(0, 0, 10, 0) }); } catch { }
-            title.Children.Add(new TextBlock { Text = "HALLOW", FontSize = 22, FontWeight = FontWeights.Bold, Foreground = B(Program.AccentHex), VerticalAlignment = VerticalAlignment.Center });
+            title.Children.Add(new TextBlock { Text = "HALLOW", FontSize = 22, FontWeight = FontWeights.Bold, Foreground = B(Look.TextAccent(Program.AccentHex)), VerticalAlignment = VerticalAlignment.Center });
             title.Children.Add(new TextBlock { Text = " SETUP", FontSize = 22, FontWeight = FontWeights.Light, VerticalAlignment = VerticalAlignment.Center });
             // v1.1: "Update Hallow Setup" appears here when a newer Setup is out
             selfBtn = new Button { Content = "Update Hallow Setup", Style = (Style)FindResource("Accent"), Margin = new Thickness(16, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
@@ -144,8 +166,53 @@ namespace HallowSetup
             status = new TextBlock { TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
             bottom.Children.Add(status); Grid.SetRow(bottom, 2); root.Children.Add(bottom);
             var foot = new TextBlock { Text = "Hallow Setup " + Program.Version + "  -  icons: Font Awesome Free (CC BY 4.0)", Foreground = (Brush)FindResource("Muted"), FontSize = 11, Margin = new Thickness(0, 12, 0, 0) };
-            Grid.SetRow(foot, 3); root.Children.Add(foot);
+            foot.Margin = new Thickness(0); foot.VerticalAlignment = VerticalAlignment.Center;
+            var footRow = new DockPanel { Margin = new Thickness(0, 10, 0, 0) }; var look = LookPicker(); DockPanel.SetDock(look, Dock.Right);   // v1.10
+            footRow.Children.Add(look); footRow.Children.Add(foot);
+            Grid.SetRow(footRow, 3); root.Children.Add(footRow);
             return root;
+        }
+
+        // v1.10: redraws the window when the mode or the accent changed (force = Setup's own Look was just picked)
+        bool? lastBad;
+        void Retheme(bool force)
+        {
+            bool light; string acc;
+            try { light = Look.CurrentLight(); acc = Setup.Accent() ?? "#F07820"; } catch { return; }
+            if (!force && light == Look.Light && acc == Program.AccentHex) return;
+            Redraw(light);
+        }
+        public void Redraw(bool light)
+        {
+            try
+            {
+                var off = scroll != null ? scroll.VerticalOffset : 0; var st = status != null ? status.Text : ""; var bad = lastBad;
+                Program.ApplyTheme(light);
+                Background = (Brush)FindResource("Bg"); Foreground = (Brush)FindResource("Text");
+                Content = Build(); Refresh(); checkBtn.IsEnabled = !busy;
+                if (bad.HasValue) Say(st, bad.Value); else { status.Text = st; status.Foreground = (Brush)FindResource("Muted"); }
+                if (scroll != null) scroll.ScrollToVerticalOffset(off);
+                Look.TitleBar(this);
+            }
+            catch { }
+        }
+        // v1.10: Look - Follow Hallow / Light / Dark (saved in %APPDATA%\HallowSetup\settings.json)
+        FrameworkElement LookPicker()
+        {
+            var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            sp.Children.Add(new TextBlock { Text = "Look", Foreground = (Brush)FindResource("Muted"), FontSize = 11.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+            var keys = new[] { "follow", "light", "dark" };
+            var cb = new ComboBox { Style = (Style)FindResource("Combo"), Width = 132, Height = 26, ToolTip = "Light or dark - Follow Hallow uses the mode picked in Hallow Toolkit" };
+            foreach (var n in new[] { "Follow Hallow", "Light", "Dark" }) cb.Items.Add(new ComboBoxItem { Content = n });
+            cb.SelectedIndex = Math.Max(0, Array.IndexOf(keys, Look.AppLook(Look.SettingsFile)));
+            cb.SelectionChanged += (s, e) =>
+            {
+                var k = keys[Math.Max(0, cb.SelectedIndex)];
+                try { Look.SaveAppLook(Look.SettingsFile, k); } catch (Exception ex) { Say("Couldn't save the look: " + ex.Message, true); return; }
+                Dispatcher.BeginInvoke(new Action(() => Retheme(true)));
+            };
+            sp.Children.Add(cb);
+            return sp;
         }
 
         void Refresh()
@@ -232,8 +299,8 @@ namespace HallowSetup
             var mid = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
             var name = new TextBlock { FontSize = 14 }; name.Inlines.Add(new System.Windows.Documents.Run(a.Title) { FontWeight = FontWeights.SemiBold });
             var ver = !installed ? "  Not installed" : "  " + Setup.Show(iv) + (a.Running ? " - running" : "");
-            name.Inlines.Add(new System.Windows.Documents.Run(ver) { Foreground = installed ? (Brush)FindResource("Muted") : B("#F0BE5A"), FontSize = 12 });
-            if (a.UpdateAvailable) name.Inlines.Add(new System.Windows.Documents.Run("  -  " + Setup.Show(a.Latest) + " is out") { Foreground = B("#6ED28C"), FontSize = 12 });
+            name.Inlines.Add(new System.Windows.Documents.Run(ver) { Foreground = installed ? (Brush)FindResource("Muted") : B(Look.Amber), FontSize = 12 });
+            if (a.UpdateAvailable) name.Inlines.Add(new System.Windows.Documents.Run("  -  " + Setup.Show(a.Latest) + " is out") { Foreground = B(Look.Green), FontSize = 12 });
             else if (a.Latest != null && !installed) name.Inlines.Add(new System.Windows.Documents.Run("  -  latest " + Setup.Show(a.Latest)) { Foreground = (Brush)FindResource("Muted"), FontSize = 12 });
             mid.Children.Add(name);
             mid.Children.Add(new TextBlock { Text = a.Desc, Foreground = (Brush)FindResource("Muted"), TextWrapping = TextWrapping.Wrap });
@@ -255,12 +322,12 @@ namespace HallowSetup
                 catch { src = null; }
                 appIcons[name] = src;
             }
-            if (src == null) return Icons.Make(fa, 24, B(Program.AccentHex));
+            if (src == null) return Icons.Make(fa, 24, B(Look.TextAccent(Program.AccentHex)));
             var img = new Image { Source = src, Width = 32, Height = 32, SnapsToDevicePixels = true };
             RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
             return img;
         }
-        void Say(string text, bool bad) { status.Text = text; status.Foreground = bad ? B("#F0BE5A") : B("#6ED28C"); }
+        void Say(string text, bool bad) { lastBad = bad; status.Text = text; status.Foreground = bad ? B(Look.Amber) : B(Look.Green); }
 
         // ---- v1.6: Hallow Shield, the browser extension: its unpacked folder, and the steps to load it in a browser
         bool shieldSteps;
@@ -298,8 +365,8 @@ namespace HallowSetup
             DockPanel.SetDock(right, Dock.Right); dp.Children.Add(right);
             var mid = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
             var name = new TextBlock { FontSize = 14 }; name.Inlines.Add(new System.Windows.Documents.Run("Hallow Shield (browser extension)") { FontWeight = FontWeights.SemiBold });
-            name.Inlines.Add(new System.Windows.Documents.Run(!installed ? "  Not installed" : "  " + Setup.Show(iv)) { Foreground = installed ? (Brush)FindResource("Muted") : B("#F0BE5A"), FontSize = 12 });
-            if (upd) name.Inlines.Add(new System.Windows.Documents.Run("  -  " + Setup.Show(Shield.Latest) + " is out") { Foreground = B("#6ED28C"), FontSize = 12 });
+            name.Inlines.Add(new System.Windows.Documents.Run(!installed ? "  Not installed" : "  " + Setup.Show(iv)) { Foreground = installed ? (Brush)FindResource("Muted") : B(Look.Amber), FontSize = 12 });
+            if (upd) name.Inlines.Add(new System.Windows.Documents.Run("  -  " + Setup.Show(Shield.Latest) + " is out") { Foreground = B(Look.Green), FontSize = 12 });
             else if (Shield.Latest != null && !installed) name.Inlines.Add(new System.Windows.Documents.Run("  -  latest " + Setup.Show(Shield.Latest)) { Foreground = (Brush)FindResource("Muted"), FontSize = 12 });
             mid.Children.Add(name);
             mid.Children.Add(new TextBlock { Text = "Ad, tracker and cookie-banner blocker for Chrome, Edge and Brave - unpacked into " + Shield.Dir("chrome"), Foreground = (Brush)FindResource("Muted"), TextWrapping = TextWrapping.Wrap });
@@ -331,7 +398,7 @@ namespace HallowSetup
             sp.Children.Add(new TextBlock { Text = "Shield keeps its settings, My filters and stats in the browser, not in this folder, so updating replaces the folder safely.", Foreground = (Brush)FindResource("Muted"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 6) });
             // v1.8: Shield 1.6 has a fixed extension ID (for the family bridge): the browser sees it as a new extension
             var iv = Shield.InstalledVersion("chrome");
-            if (iv != null && iv >= new Version(1, 6)) sp.Children.Add(new TextBlock { Text = "Coming from Shield 1.5 or older? 1.6 has a fixed extension ID, so the browser treats it as a new extension: remove the old Shield card, then Load unpacked again (or click reload, then remove the old card if two show). Its settings and stats start fresh - export My filters first (Shield options, My filters, Export).", Foreground = B("#F0BE5A"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
+            if (iv != null && iv >= new Version(1, 6)) sp.Children.Add(new TextBlock { Text = "Coming from Shield 1.5 or older? 1.6 has a fixed extension ID, so the browser treats it as a new extension: remove the old Shield card, then Load unpacked again (or click reload, then remove the old card if two show). Its settings and stats start fresh - export My filters first (Shield options, My filters, Export).", Foreground = B(Look.Amber), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
             // v1.8: Shield 1.6+ brings the Hallow family bridge (registered for this user when Shield is unpacked)
             if (Shield.BridgeRegistered()) sp.Children.Add(new TextBlock { Text = "The Hallow family bridge is registered: turn on \"Share counts with Hallow apps on this PC\" in Shield's options (Stats) to show what Shield blocked in Hallow Hub and Remote. It stays off until you turn it on.", Foreground = (Brush)FindResource("Muted"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
             // Firefox: secondary (it only keeps an unsigned add-on until it restarts)

@@ -24,6 +24,10 @@ HALLOW SHIELD (BROWSER EXTENSION)
 - Shield 1.6 and newer: Setup also registers the Hallow family bridge for your user (no admin), so Hallow Hub and
   Remote can show what Shield blocked - only once you turn on "Share counts with Hallow apps on this PC" in Shield.
 
+WHAT'S NEW IN 1.10
+- Light and dark mode: Setup follows the mode picked in Hallow Toolkit, or pick its own Look at the bottom right
+  (Follow Hallow / Light / Dark).
+
 WHAT'S NEW IN 1.9
 - Hallow Tasks (a better Task Manager, no admin) is in the list.
 

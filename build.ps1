@@ -1,4 +1,6 @@
 ﻿# Builds HallowSetup.exe with the C# compiler that ships with Windows (.NET Framework 4.8) - nothing to install.
+#   .\build.ps1 -Tests   also tests\SetupTests.exe (unit tests: light / dark mode, contrast, the theme colours)
+param([switch]$Tests)
 $ErrorActionPreference = 'Stop'
 $fw = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319"
 $wpf = "$fw\WPF"
@@ -12,3 +14,11 @@ $args = @('/nologo', '/target:winexe', '/optimize+', "/out:$out", "/win32icon:$s
 & "$fw\csc.exe" @args
 if ($LASTEXITCODE -ne 0) { throw "Build failed" }
 "Built $out ($([math]::Round((Get-Item $out).Length / 1KB)) KB)"
+if ($Tests) {
+    $t = Join-Path $PSScriptRoot 'tests\SetupTests.exe'
+    $targs = @('/nologo', '/target:exe', '/optimize+', "/out:$t", '/main:HallowSetup.Tests.Run') + ($refs | ForEach-Object { "/reference:$_" }) +
+        (Get-ChildItem $src -Filter *.cs | ForEach-Object FullName) + (Get-ChildItem (Join-Path $PSScriptRoot 'tests') -Filter *.cs | ForEach-Object FullName)
+    & "$fw\csc.exe" @targs
+    if ($LASTEXITCODE -ne 0) { throw "Test build failed" }
+    "Built $t"
+}
