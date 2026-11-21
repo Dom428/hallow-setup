@@ -6,7 +6,7 @@ HOW TO USE
 3. Double-click HallowSetup.exe (no admin needed, nothing to install)
 
 WHAT IT DOES
-- Shows every Hallow app (Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Toolkit) with the version
+- Shows every Hallow app (Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Toolkit) with the version
   on your PC and the newest one.
 - Install / Update downloads that app's release from GitHub only when you click, checks it against
   GitHub's SHA-256 checksum, and runs the app's own installer as you (never as admin).
@@ -14,6 +14,9 @@ WHAT IT DOES
 - Start with Windows: the same switch as in each app's own Settings.
 - Uninstall (bin button): closes the app, removes it, and keeps your settings unless you tick them.
   Everything goes to the Recycle Bin. Backups, clips and your password vault are never touched.
+
+WHAT'S NEW IN 1.5
+- Hallow Guard is in the list.
 
 WHAT'S NEW IN 1.4
 - Hallow Assist is in the list.

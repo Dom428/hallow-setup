@@ -1,6 +1,6 @@
 # Hallow Setup
 
-One window to install, update, start and uninstall the Hallow family - [Hallow Mixer](https://github.com/Dom428/hallow-mixer), [Hallow Hub](https://github.com/Dom428/hallow-hub), [Hallow Vault](https://github.com/Dom428/hallow-vault), [Hallow Overlay](https://github.com/Dom428/hallow-overlay), [Hallow Remote](https://github.com/Dom428/hallow-remote), [Hallow Clips](https://github.com/Dom428/hallow-clips), [Hallow Keys](https://github.com/Dom428/hallow-keys), [Hallow Assist](https://github.com/Dom428/hallow-assist) and [Hallow Toolkit](https://github.com/Dom428/hallow-toolkit).
+One window to install, update, start and uninstall the Hallow family - [Hallow Mixer](https://github.com/Dom428/hallow-mixer), [Hallow Hub](https://github.com/Dom428/hallow-hub), [Hallow Vault](https://github.com/Dom428/hallow-vault), [Hallow Overlay](https://github.com/Dom428/hallow-overlay), [Hallow Remote](https://github.com/Dom428/hallow-remote), [Hallow Clips](https://github.com/Dom428/hallow-clips), [Hallow Keys](https://github.com/Dom428/hallow-keys), [Hallow Assist](https://github.com/Dom428/hallow-assist), [Hallow Guard](https://github.com/Dom428/hallow-guard) and [Hallow Toolkit](https://github.com/Dom428/hallow-toolkit).
 
 - A checklist of every Hallow app: what it does, the version on your PC and the newest one on GitHub
 - **Install / Update** per app: nothing is downloaded until you click. The release zip is checked against the SHA-256 checksum GitHub publishes for it (no checksum or a mismatch = not installed), unpacked to a temp folder, and the app's own `Install.ps1` runs as you - never as admin
@@ -16,6 +16,7 @@ Built with the C# compiler that ships with Windows (.NET Framework 4.8): run `bu
 
 ## What's new
 
+- **1.5** - Hallow Guard is in the list.
 - **1.4** - Hallow Assist is in the list.
 - **1.3** - Uninstall any Hallow app from Setup: the app closes first, settings stay unless you tick them, and everything goes to the Recycle Bin. Backups, clips and your password vault are never touched.
 - **1.2** - Hallow Keys is in the list.
