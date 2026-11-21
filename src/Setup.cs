@@ -25,6 +25,8 @@ namespace HallowSetup
     {
         public string Name, Icon, Desc;
         public bool IsToolkit { get { return Name == "Toolkit"; } }
+        // v1.11: Hallow Browser runs only while its window is open - no tray, no Start with Windows
+        public bool NoTray { get { return Name == "Browser"; } }
         public string Title { get { return "Hallow " + Name; } }
         public string Repo { get { return "Dom428/hallow-" + Name.ToLowerInvariant(); } }
         public bool Ticked;   // v1.1: picked for "Install ticked"
@@ -75,6 +77,7 @@ namespace HallowSetup
             new HallowApp { Name = "Assist",  Icon = "hand-holding-heart", Desc = "Remote help for friends and family through your own relay, with their OK" },
             new HallowApp { Name = "Guard",   Icon = "shield-halved", Desc = "A friendly safety center on top of Microsoft Defender (uses Defender's engine - not an antivirus of its own)" },
             new HallowApp { Name = "Tasks",   Icon = "gauge-high",    Desc = "A better Task Manager: apps grouped like Task Manager, what's slowing your game and live graphs (no admin)" },
+            new HallowApp { Name = "Browser", Icon = "globe",         Desc = "A fast browser for gamers: Hallow Shield built in, Keys autofill, game mode (never makes itself your default browser)" },
             new HallowApp { Name = "Toolkit", Icon = "bolt",          Desc = "One-click PC tune-up, monitoring, gaming and clean-up tools (installs as admin)" },
         };
 

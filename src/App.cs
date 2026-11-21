@@ -1,5 +1,5 @@
 ﻿// Hallow Setup - one window to install, update and start-with-Windows the Hallow family:
-// Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks and Toolkit. Nothing is downloaded until you click Install or Update.
+// Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser and Toolkit. Nothing is downloaded until you click Install or Update.
 // v1.3: Uninstall per app (Uninstall.cs, UninstallDialog.cs).
 // v1.4: Hallow Assist in the list.
 // v1.5: Hallow Guard in the list.
@@ -25,14 +25,14 @@ using System.Windows.Media.Imaging;
 [assembly: AssemblyTitle("Hallow Setup")]
 [assembly: AssemblyProduct("Hallow Setup")]
 [assembly: AssemblyDescription("Install and update the Hallow apps")]
-[assembly: AssemblyVersion("1.10.0.0")]
-[assembly: AssemblyFileVersion("1.10.0.0")]
+[assembly: AssemblyVersion("1.11.0.0")]
+[assembly: AssemblyFileVersion("1.11.0.0")]
 
 namespace HallowSetup
 {
     public static class Program
     {
-        public const string Version = "1.10";
+        public const string Version = "1.11";
         public static string AccentHex = "#F07820";
         static string ThemeXaml;
         // v1.10: Theme.xaml in light or dark with the Hallow accent picked in Hallow Toolkit (if any)
@@ -269,7 +269,8 @@ namespace HallowSetup
             DockPanel.SetDock(icon, Dock.Left); dp.Children.Add(icon);
             var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
             var installed = a.Installed; var iv = a.InstalledVersion;
-            if (!a.IsToolkit)
+            if (a.NoTray) right.Children.Add(new TextBlock { Text = "Opens from its shortcut", Foreground = (Brush)FindResource("Muted"), Margin = new Thickness(0, 0, 14, 0), VerticalAlignment = VerticalAlignment.Center });
+            else if (!a.IsToolkit)
             {
                 var sw = new CheckBox { Content = new TextBlock { Text = "Start with Windows" }, IsChecked = installed && a.StartsWithWindows, IsEnabled = installed && !busy, Style = (Style)FindResource("Switch"), Margin = new Thickness(0, 0, 14, 0), VerticalAlignment = VerticalAlignment.Center,
                     ToolTip = installed ? "Starts " + a.Title + " in the tray when you sign in (its own Start with Windows setting)" : "Install it first" };

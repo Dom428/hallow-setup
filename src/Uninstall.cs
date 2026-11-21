@@ -211,6 +211,11 @@ namespace HallowSetup
             // 3. Start with Windows, Apps & features entry, Keys' browser link
             try { using (var k = Registry.CurrentUser.OpenSubKey(Setup.RunKey, true)) if (k != null) k.DeleteValue("Hallow" + a.Name, false); } catch (Exception e) { ok = false; notes.Add("Start with Windows entry: " + e.Message); }
             try { Registry.CurrentUser.DeleteSubKeyTree(RegRoot + @"Software\Microsoft\Windows\CurrentVersion\Uninstall\Hallow" + a.Name, false); } catch { }
+            if (a.Name == "Browser")   // v1.11: its "a browser you can pick" registration
+            {
+                foreach (var k in new[] { @"Software\Clients\StartMenuInternet\HallowBrowser", @"Software\Classes\HallowBrowserURL" }) try { Registry.CurrentUser.DeleteSubKeyTree(RegRoot + k, false); } catch { }
+                try { using (var k = Registry.CurrentUser.OpenSubKey(RegRoot + @"Software\RegisteredApplications", true)) if (k != null) k.DeleteValue("Hallow Browser", false); } catch { }
+            }
             if (a.Name == "Keys")
             {
                 foreach (var b in new[] { @"Software\Google\Chrome", @"Software\Microsoft\Edge", @"Software\BraveSoftware\Brave-Browser" })
@@ -226,6 +231,7 @@ namespace HallowSetup
                 var why = DataBlocked(a); var d = DataDir(a);
                 if (why != null) notes.Add(why);
                 else if (Directory.Exists(d)) { if (Recycle(d)) notes.Add("Settings and data are in the Recycle Bin."); else { ok = false; notes.Add("Couldn't remove " + d + "."); } }
+                if (a.Name == "Browser") { var prof = Path.Combine(Setup.Local, "HallowBrowser"); if (Directory.Exists(prof)) { if (Recycle(prof)) notes.Add("Browsing data (cookies, history) is in the Recycle Bin."); else { ok = false; notes.Add("Couldn't remove " + prof + "."); } } }
             }
             else if (a.Name != "Keys" && Directory.Exists(DataDir(a))) notes.Add("Your settings stay in " + DataDir(a) + ".");
             var kn = a.Name == "Vault" ? "Your backups are still there." : a.Name == "Clips" ? "Your clips are still there." : a.Name == "Keys" ? "Your password vault is still in " + DataDir(a) + "." : null;
