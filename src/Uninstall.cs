@@ -136,6 +136,7 @@ namespace HallowSetup
             if (a.Name == "Tasks") return "Startup entries you disabled with Hallow Tasks stay in its backup (HKCU\\Software\\HallowTasks) - reinstall Hallow Tasks to put them back.";
             if (a.Name == "VPN") return "Windows' \"Hallow VPN\" connection is disconnected and removed. If its kill switch is installed, Windows asks for permission to remove it too. NordVPN's root certificate stays.";
             if (a.Name == "Home") return "Home Assistant on your NAS isn't touched (revoke Hallow Home's token there if you like). Snapshots in Pictures\\Hallow Home stay.";
+            if (a.Name == "Email") return "Your mail stays on your providers' servers. Ticking \"Also remove my settings and data\" removes only the encrypted cache and saved sign-ins on this PC (to the Recycle Bin).";
             if (a.Name == "Torrents") return "Your downloaded files are never touched. Its .torrent / magnet link handler is removed where it points at Hallow Torrents.";
             return null;
         }
@@ -276,6 +277,7 @@ namespace HallowSetup
                 if (why != null) notes.Add(why);
                 else if (Directory.Exists(d)) { if (Recycle(d)) notes.Add("Settings and data are in the Recycle Bin."); else { ok = false; notes.Add("Couldn't remove " + d + "."); } }
                 if (a.Name == "Home") { var wv = Path.Combine(Setup.Local, "HallowHome"); if (Directory.Exists(wv) && !Recycle(wv)) { ok = false; notes.Add("Couldn't remove " + wv + "."); } }   // v1.16: the live view's WebView2 cache
+                if (a.Name == "Email") { var wv = Path.Combine(Setup.Local, "HallowEmail"); if (Directory.Exists(wv) && !Recycle(wv)) { ok = false; notes.Add("Couldn't remove " + wv + "."); } }   // v1.17: the reader's WebView2 scratch folder
                 if (a.Name == "Browser") { var prof = Path.Combine(Setup.Local, "HallowBrowser"); if (Directory.Exists(prof)) { if (Recycle(prof)) notes.Add("Browsing data (cookies, history) is in the Recycle Bin."); else { ok = false; notes.Add("Couldn't remove " + prof + "."); } } }
             }
             else if (a.Name != "Keys" && a.Name != "Financials" && Directory.Exists(DataDir(a))) notes.Add("Your settings stay in " + DataDir(a) + ".");

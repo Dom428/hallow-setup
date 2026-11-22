@@ -82,6 +82,7 @@ namespace HallowSetup
             new HallowApp { Name = "Torrents", Icon = "magnet",       Desc = "A game-aware torrent client that only runs over your VPN: every connection locked to it, Defender-checked downloads" },
             new HallowApp { Name = "Financials", Icon = "wallet",     Desc = "Private personal finance in an encrypted vault: import bank statements, budgets, subscriptions, bill reminders (never moves money)" },
             new HallowApp { Name = "Home",    Icon = "house",         Desc = "Your pets' feeder and fountain, cameras and lock through your own Home Assistant: smarter alerts, Feed now with a confirm" },
+            new HallowApp { Name = "Email",   Icon = "envelope",      Desc = "A private email client: one inbox for all your accounts, trackers and phishing blocked, a private spam filter" },
             new HallowApp { Name = "Toolkit", Icon = "bolt",          Desc = "One-click PC tune-up, monitoring, gaming and clean-up tools (installs as admin)" },
         };
 
