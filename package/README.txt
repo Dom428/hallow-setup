@@ -6,7 +6,7 @@ HOW TO USE
 3. Double-click HallowSetup.exe (no admin needed, nothing to install)
 
 WHAT IT DOES
-- Shows every Hallow app (Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser, Toolkit) and the Hallow
+- Shows every Hallow app (Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser, VPN, Toolkit) and the Hallow
   Shield browser extension, with the version on your PC and the newest one.
 - Install / Update downloads that app's release from GitHub only when you click, checks it against
   GitHub's SHA-256 checksum, and runs the app's own installer as you (never as admin).
@@ -23,6 +23,10 @@ HALLOW SHIELD (BROWSER EXTENSION)
 - Uninstall moves the folder to the Recycle Bin; remove Shield's card in the browser yourself.
 - Shield 1.6 and newer: Setup also registers the Hallow family bridge for your user (no admin), so Hallow Hub and
   Remote can show what Shield blocked - only once you turn on "Share counts with Hallow apps on this PC" in Shield.
+
+WHAT'S NEW IN 1.13
+- Hallow VPN (your NordVPN subscription on Windows' own IKEv2 VPN client) is in the list. Uninstalling it removes
+  its Windows VPN connection and, if its kill switch is installed, asks Windows to remove that too.
 
 WHAT'S NEW IN 1.12
 - Light mode readability fixes: with a violet or other mid-tone accent, the filled buttons (Install, Update,

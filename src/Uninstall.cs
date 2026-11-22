@@ -132,7 +132,18 @@ namespace HallowSetup
             if (a.Name == "Keys") return "Your password vault is never touched (" + DataDir(a) + ").";
             if (a.Name == "Guard") return "Startup entries you disabled with Hallow Guard stay in its backup (HKCU\\Software\\HallowGuard) - reinstall Hallow Guard to put them back.";
             if (a.Name == "Tasks") return "Startup entries you disabled with Hallow Tasks stay in its backup (HKCU\\Software\\HallowTasks) - reinstall Hallow Tasks to put them back.";
+            if (a.Name == "VPN") return "Windows' \"Hallow VPN\" connection is disconnected and removed. If its kill switch is installed, Windows asks for permission to remove it too. NordVPN's root certificate stays.";
             return null;
+        }
+        // v1.13: how many of Hallow VPN's kill switch firewall rules exist (read-only: netsh lists the rules)
+        public static int VpnKillSwitchRules()
+        {
+            try
+            {
+                var psi = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "netsh.exe"), "advfirewall firewall show rule name=all dir=out") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true };
+                using (var p = Process.Start(psi)) { var o = p.StandardOutput.ReadToEnd(); p.WaitForExit(15000); return o.Split('\n').Count(l => l.Contains("Hallow VPN kill switch - ")); }
+            }
+            catch { return 0; }
         }
         public static string[] Shortcuts(HallowApp a) { return new[] { Path.Combine(StartMenu, a.Title + ".lnk"), Path.Combine(Desktop, a.Title + ".lnk") }; }
 
@@ -207,6 +218,21 @@ namespace HallowSetup
                 try { var p = Process.Start(new ProcessStartInfo(a.Exe, "--reset") { UseShellExecute = false, CreateNoWindow = true }); if (!p.WaitForExit(20000)) notes.Add("Hallow Mixer's volume reset didn't finish."); }
                 catch (Exception e) { notes.Add("Couldn't reset volumes: " + e.Message); }
                 try { var eq = Path.Combine(ProgramData, @"HallowMixer\eq.txt"); if (File.Exists(eq)) File.WriteAllText(eq, "# Hallow Mixer was uninstalled - no EQ.\r\n", new UTF8Encoding(true)); } catch { }
+            }
+            // v1.13: Hallow VPN - hang up and remove its per-user "Hallow VPN" connection (no admin). Its kill switch firewall rules
+            // would keep blocking the internet without the VPN, so Hallow VPN's own elevated helper removes them - Windows asks (UAC).
+            if (a.Name == "VPN")
+            {
+                try { using (var p = Process.Start(new ProcessStartInfo("rasdial.exe", "\"Hallow VPN\" /disconnect") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true })) p.WaitForExit(10000); } catch { }
+                try { using (var p = Process.Start(new ProcessStartInfo("powershell.exe", "-NoProfile -NonInteractive -Command \"if (Get-VpnConnection -Name 'Hallow VPN' -ErrorAction SilentlyContinue) { Remove-VpnConnection -Name 'Hallow VPN' -Force }\"") { UseShellExecute = false, CreateNoWindow = true })) p.WaitForExit(30000); }
+                catch { notes.Add("Couldn't remove Windows' \"Hallow VPN\" connection - remove it in Settings > Network & internet > VPN."); }
+                if (VpnKillSwitchRules() > 0)
+                {
+                    progress("Removing Hallow VPN's kill switch (Windows asks for permission)...");
+                    try { using (var p = Process.Start(new ProcessStartInfo(a.Exe, "--elevated killswitch-off") { UseShellExecute = true, Verb = "runas", WindowStyle = ProcessWindowStyle.Hidden })) p.WaitForExit(120000); } catch { }
+                    if (VpnKillSwitchRules() > 0) { ok = false; notes.Add("The kill switch's firewall rules are still there and block the internet without the VPN: remove the rules named \"Hallow VPN kill switch - ...\" in Windows Defender Firewall's advanced settings, or reinstall Hallow VPN and remove it there."); }
+                    else notes.Add("Hallow VPN's kill switch is removed.");
+                }
             }
             // 3. Start with Windows, Apps & features entry, Keys' browser link
             try { using (var k = Registry.CurrentUser.OpenSubKey(Setup.RunKey, true)) if (k != null) k.DeleteValue("Hallow" + a.Name, false); } catch (Exception e) { ok = false; notes.Add("Start with Windows entry: " + e.Message); }
