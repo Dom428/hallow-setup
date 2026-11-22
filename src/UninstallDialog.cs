@@ -40,7 +40,7 @@ namespace HallowSetup
             if (kept != null) sp.Children.Add(new TextBlock { Text = kept, TextWrapping = TextWrapping.Wrap, Foreground = B(Look.Green), Margin = new Thickness(0, 10, 0, 0) });
             var blocked = Uninstaller.DataBlocked(a);
             data = null;
-            if (a.Name != "Keys")
+            if (a.Name != "Keys" && a.Name != "Financials")
             {
                 var label = new StackPanel();
                 label.Children.Add(new TextBlock { Text = "Also remove my settings and data", Foreground = (Brush)w.FindResource("Text") });

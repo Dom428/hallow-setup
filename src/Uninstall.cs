@@ -92,7 +92,7 @@ namespace HallowSetup
                     if (File.Exists(f)) dir = Setting(f, "Folder");
                     res.Add(!string.IsNullOrEmpty(dir) ? dir : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "Hallow Clips"));
                 }
-                else if (a.Name == "Keys") res.Add(DataDir(a));   // the password vault: Setup never removes it
+                else if (a.Name == "Keys" || a.Name == "Financials") res.Add(DataDir(a));   // the password vault / the finance vault: Setup never removes them
             }
             catch { return null; }
             return res;
@@ -117,6 +117,7 @@ namespace HallowSetup
         {
             if (a.IsToolkit) return "Hallow Toolkit keeps its settings in its own folder.";
             if (a.Name == "Keys") return "Your password vault stays in " + DataDir(a) + " - Hallow Setup never removes it.";
+            if (a.Name == "Financials") return "Your encrypted finance vault and its backups stay in " + DataDir(a) + " - Hallow Setup never removes them.";
             var kept = KeptFolders(a);
             if (kept == null) return "Couldn't read " + a.Title + "'s settings, so its data stays.";
             var d = DataDir(a);
@@ -130,6 +131,7 @@ namespace HallowSetup
             if (a.Name == "Vault") return "Your backups are never touched" + (kept != null && kept.Count > 0 ? " (" + string.Join(", ", kept) + ")." : ".");
             if (a.Name == "Clips") return "Your saved clips are never touched" + (kept != null && kept.Count > 0 ? " (" + kept[0] + ")." : ".");
             if (a.Name == "Keys") return "Your password vault is never touched (" + DataDir(a) + ").";
+            if (a.Name == "Financials") return "Your encrypted finance vault and its backups are never touched (" + DataDir(a) + ").";
             if (a.Name == "Guard") return "Startup entries you disabled with Hallow Guard stay in its backup (HKCU\\Software\\HallowGuard) - reinstall Hallow Guard to put them back.";
             if (a.Name == "Tasks") return "Startup entries you disabled with Hallow Tasks stay in its backup (HKCU\\Software\\HallowTasks) - reinstall Hallow Tasks to put them back.";
             if (a.Name == "VPN") return "Windows' \"Hallow VPN\" connection is disconnected and removed. If its kill switch is installed, Windows asks for permission to remove it too. NordVPN's root certificate stays.";
@@ -256,6 +258,7 @@ namespace HallowSetup
                 foreach (var k in new[] { @"Software\Classes\HallowTorrents.torrent", @"Software\Classes\HallowTorrents.magnet", @"Software\HallowTorrents" }) try { Registry.CurrentUser.DeleteSubKeyTree(RegRoot + k, false); } catch { }
                 try { using (var k = Registry.CurrentUser.OpenSubKey(RegRoot + @"Software\RegisteredApplications", true)) if (k != null) k.DeleteValue("Hallow Torrents", false); } catch { }
             }
+            if (a.Name == "Financials") Recycle(Path.Combine(DataDir(a), "hello.bin"));   // the Windows Hello unlock key, not the vault
             if (a.Name == "Keys")
             {
                 foreach (var b in new[] { @"Software\Google\Chrome", @"Software\Microsoft\Edge", @"Software\BraveSoftware\Brave-Browser" })
@@ -273,8 +276,8 @@ namespace HallowSetup
                 else if (Directory.Exists(d)) { if (Recycle(d)) notes.Add("Settings and data are in the Recycle Bin."); else { ok = false; notes.Add("Couldn't remove " + d + "."); } }
                 if (a.Name == "Browser") { var prof = Path.Combine(Setup.Local, "HallowBrowser"); if (Directory.Exists(prof)) { if (Recycle(prof)) notes.Add("Browsing data (cookies, history) is in the Recycle Bin."); else { ok = false; notes.Add("Couldn't remove " + prof + "."); } } }
             }
-            else if (a.Name != "Keys" && Directory.Exists(DataDir(a))) notes.Add("Your settings stay in " + DataDir(a) + ".");
-            var kn = a.Name == "Vault" ? "Your backups are still there." : a.Name == "Clips" ? "Your clips are still there." : a.Name == "Keys" ? "Your password vault is still in " + DataDir(a) + "." : null;
+            else if (a.Name != "Keys" && a.Name != "Financials" && Directory.Exists(DataDir(a))) notes.Add("Your settings stay in " + DataDir(a) + ".");
+            var kn = a.Name == "Vault" ? "Your backups are still there." : a.Name == "Clips" ? "Your clips are still there." : a.Name == "Keys" ? "Your password vault is still in " + DataDir(a) + "." : a.Name == "Financials" ? "Your encrypted finance vault is still in " + DataDir(a) + "." : null;
             if (kn != null) notes.Insert(0, kn);
             return new UninstallResult { Ok = ok, Message = (ok ? a.Title + " is uninstalled." : a.Title + " is partly uninstalled.") + (notes.Count > 0 ? " " + string.Join(" ", notes) : "") };
         }

@@ -6,14 +6,14 @@ HOW TO USE
 3. Double-click HallowSetup.exe (no admin needed, nothing to install)
 
 WHAT IT DOES
-- Shows every Hallow app (Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser, VPN, Torrents, Toolkit) and the Hallow
+- Shows every Hallow app (Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser, VPN, Torrents, Financials, Toolkit) and the Hallow
   Shield browser extension, with the version on your PC and the newest one.
 - Install / Update downloads that app's release from GitHub only when you click, checks it against
   GitHub's SHA-256 checksum, and runs the app's own installer as you (never as admin).
 - Hallow Toolkit installs as admin: Setup starts its installer and Windows asks you first.
 - Start with Windows: the same switch as in each app's own Settings.
 - Uninstall (bin button): closes the app, removes it, and keeps your settings unless you tick them.
-  Everything goes to the Recycle Bin. Backups, clips and your password vault are never touched.
+  Everything goes to the Recycle Bin. Backups, clips and your password and finance vaults are never touched.
 
 HALLOW SHIELD (BROWSER EXTENSION)
 - Install / Update puts Shield's newest release (checked against GitHub's SHA-256) into
@@ -23,6 +23,10 @@ HALLOW SHIELD (BROWSER EXTENSION)
 - Uninstall moves the folder to the Recycle Bin; remove Shield's card in the browser yourself.
 - Shield 1.6 and newer: Setup also registers the Hallow family bridge for your user (no admin), so Hallow Hub and
   Remote can show what Shield blocked - only once you turn on "Share counts with Hallow apps on this PC" in Shield.
+
+WHAT'S NEW IN 1.15
+- Hallow Financials (private personal finance in an encrypted vault) is in the list. Uninstalling it never
+  touches its encrypted vault or backups.
 
 WHAT'S NEW IN 1.14
 - Hallow Torrents (a game-aware torrent client that only runs over your VPN) is in the list. Uninstalling it
