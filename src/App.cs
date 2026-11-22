@@ -1,5 +1,5 @@
 ﻿// Hallow Setup - one window to install, update and start-with-Windows the Hallow family:
-// Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser, VPN, Torrents, Financials and Toolkit. Nothing is downloaded until you click Install or Update.
+// Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser, VPN, Torrents, Financials, Home and Toolkit. Nothing is downloaded until you click Install or Update.
 // v1.3: Uninstall per app (Uninstall.cs, UninstallDialog.cs).
 // v1.4: Hallow Assist in the list.
 // v1.5: Hallow Guard in the list.
@@ -13,6 +13,7 @@
 // v1.13: Hallow VPN in the list; its uninstall removes the per-user "Hallow VPN" connection and offers to remove its kill switch (UAC).
 // v1.14: Hallow Torrents in the list; its uninstall removes its per-user .torrent / magnet handler (only where it points at Hallow Torrents).
 // v1.15: Hallow Financials in the list; its uninstall never touches its encrypted vault (like Hallow Keys').
+// v1.16: Hallow Home in the list; uninstalling it leaves Home Assistant on the NAS alone (and moves its live-view WebView2 cache to the Recycle Bin with the data).
 using System;
 using System.Linq;
 using System.Reflection;
@@ -28,14 +29,14 @@ using System.Windows.Media.Imaging;
 [assembly: AssemblyTitle("Hallow Setup")]
 [assembly: AssemblyProduct("Hallow Setup")]
 [assembly: AssemblyDescription("Install and update the Hallow apps")]
-[assembly: AssemblyVersion("1.15.0.0")]
-[assembly: AssemblyFileVersion("1.15.0.0")]
+[assembly: AssemblyVersion("1.16.0.0")]
+[assembly: AssemblyFileVersion("1.16.0.0")]
 
 namespace HallowSetup
 {
     public static class Program
     {
-        public const string Version = "1.15";
+        public const string Version = "1.16";
         public static string AccentHex = "#F07820";
         static string ThemeXaml;
         // v1.10: Theme.xaml in light or dark with the Hallow accent picked in Hallow Toolkit (if any)
