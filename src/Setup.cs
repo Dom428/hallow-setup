@@ -79,6 +79,7 @@ namespace HallowSetup
             new HallowApp { Name = "Tasks",   Icon = "gauge-high",    Desc = "A better Task Manager: apps grouped like Task Manager, what's slowing your game and live graphs (no admin)" },
             new HallowApp { Name = "Browser", Icon = "globe",         Desc = "A fast browser for gamers: Hallow Shield built in, Keys autofill, game mode (never makes itself your default browser)" },
             new HallowApp { Name = "VPN",     Icon = "globe",         Desc = "Your NordVPN subscription on Windows' own VPN client: game-aware, split tunnel, optional kill switch (no drivers)" },
+            new HallowApp { Name = "Torrents", Icon = "magnet",       Desc = "A game-aware torrent client that only runs over your VPN: every connection locked to it, Defender-checked downloads" },
             new HallowApp { Name = "Toolkit", Icon = "bolt",          Desc = "One-click PC tune-up, monitoring, gaming and clean-up tools (installs as admin)" },
         };
 

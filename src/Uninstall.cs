@@ -133,6 +133,7 @@ namespace HallowSetup
             if (a.Name == "Guard") return "Startup entries you disabled with Hallow Guard stay in its backup (HKCU\\Software\\HallowGuard) - reinstall Hallow Guard to put them back.";
             if (a.Name == "Tasks") return "Startup entries you disabled with Hallow Tasks stay in its backup (HKCU\\Software\\HallowTasks) - reinstall Hallow Tasks to put them back.";
             if (a.Name == "VPN") return "Windows' \"Hallow VPN\" connection is disconnected and removed. If its kill switch is installed, Windows asks for permission to remove it too. NordVPN's root certificate stays.";
+            if (a.Name == "Torrents") return "Your downloaded files are never touched. Its .torrent / magnet link handler is removed where it points at Hallow Torrents.";
             return null;
         }
         // v1.13: how many of Hallow VPN's kill switch firewall rules exist (read-only: netsh lists the rules)
@@ -241,6 +242,19 @@ namespace HallowSetup
             {
                 foreach (var k in new[] { @"Software\Clients\StartMenuInternet\HallowBrowser", @"Software\Classes\HallowBrowserURL" }) try { Registry.CurrentUser.DeleteSubKeyTree(RegRoot + k, false); } catch { }
                 try { using (var k = Registry.CurrentUser.OpenSubKey(RegRoot + @"Software\RegisteredApplications", true)) if (k != null) k.DeleteValue("Hallow Browser", false); } catch { }
+            }
+            if (a.Name == "Torrents")   // v1.14: its per-user .torrent / magnet handler - only where it points at Hallow Torrents
+            {
+                try
+                {
+                    string cmd = null; using (var k = Registry.CurrentUser.OpenSubKey(RegRoot + @"Software\Classes\magnet\shell\open\command")) if (k != null) cmd = k.GetValue("") as string;
+                    if (cmd != null && cmd.IndexOf("HallowTorrents.exe", StringComparison.OrdinalIgnoreCase) >= 0) Registry.CurrentUser.DeleteSubKeyTree(RegRoot + @"Software\Classes\magnet", false);
+                }
+                catch { }
+                try { using (var k = Registry.CurrentUser.OpenSubKey(RegRoot + @"Software\Classes\.torrent", true)) if (k != null && (k.GetValue("") as string) == "HallowTorrents.torrent") k.DeleteValue("", false); } catch { }
+                try { using (var k = Registry.CurrentUser.OpenSubKey(RegRoot + @"Software\Classes\.torrent\OpenWithProgids", true)) if (k != null) k.DeleteValue("HallowTorrents.torrent", false); } catch { }
+                foreach (var k in new[] { @"Software\Classes\HallowTorrents.torrent", @"Software\Classes\HallowTorrents.magnet", @"Software\HallowTorrents" }) try { Registry.CurrentUser.DeleteSubKeyTree(RegRoot + k, false); } catch { }
+                try { using (var k = Registry.CurrentUser.OpenSubKey(RegRoot + @"Software\RegisteredApplications", true)) if (k != null) k.DeleteValue("Hallow Torrents", false); } catch { }
             }
             if (a.Name == "Keys")
             {
