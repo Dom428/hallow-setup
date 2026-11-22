@@ -64,6 +64,16 @@ namespace HallowSetup
         }
     }
 
+    // v1.18: a family part that isn't a Windows app (a NAS server, a phone app)
+    public class FamilyPart
+    {
+        public string Name, Icon, Desc, Kind;
+        public string Title { get { return "Hallow " + Name; } }
+        public string Repo { get { return "Dom428/hallow-" + Name.ToLowerInvariant(); } }
+        public string Url { get { return "https://github.com/" + Repo; } }
+        public Version Latest;
+    }
+
     public static class Setup
     {
         public static readonly List<HallowApp> Apps = new List<HallowApp> {
@@ -83,8 +93,32 @@ namespace HallowSetup
             new HallowApp { Name = "Financials", Icon = "wallet",     Desc = "Private personal finance in an encrypted vault: import bank statements, budgets, subscriptions, bill reminders (never moves money)" },
             new HallowApp { Name = "Home",    Icon = "house",         Desc = "Your pets' feeder and fountain, cameras and lock through your own Home Assistant: smarter alerts, Feed now with a confirm" },
             new HallowApp { Name = "Email",   Icon = "envelope",      Desc = "A private email client: one inbox for all your accounts, trackers and phishing blocked, a private spam filter" },
+            new HallowApp { Name = "Gear",    Icon = "battery-three-quarters", Desc = "Battery, charging and wired / wireless for your Logitech gear and Bluetooth devices - read-only" },
             new HallowApp { Name = "Toolkit", Icon = "bolt",          Desc = "One-click PC tune-up, monitoring, gaming and clean-up tools (installs as admin)" },
         };
+
+        // v1.18: the family parts that aren't Windows apps - listed (window, --list) so the catalogue is complete, never installed here
+        public static readonly List<FamilyPart> Others = new List<FamilyPart> {
+            new FamilyPart { Name = "Places", Icon = "location-dot", Kind = "server", Desc = "Private family location sharing on your own server (OwnTracks on the phones). It runs in Docker on your NAS - see its NAS-DEPLOY.md." },
+            new FamilyPart { Name = "Authenticator", Icon = "lock", Kind = "phone", Desc = "Your 2FA codes on your phone: an installable web app that Hallow Remote 1.19+ delivers to your phone (Home > Authenticator)." },
+        };
+        // v1.18: an app or part by name for the command line: "Hub", "hub", "Hallow Hub", "HallowHub" all work
+        public static string Norm(string name)
+        {
+            var n = (name ?? "").Trim().Trim('"').Replace(" ", "");
+            if (n.StartsWith("Hallow", StringComparison.OrdinalIgnoreCase) && n.Length > 6) n = n.Substring(6);
+            return n.ToLowerInvariant();
+        }
+        public static HallowApp Find(string name) { var n = Norm(name); return n.Length == 0 ? null : Apps.FirstOrDefault(a => a.Name.ToLowerInvariant() == n); }
+        public static FamilyPart FindOther(string name) { var n = Norm(name); return n.Length == 0 ? null : Others.FirstOrDefault(a => a.Name.ToLowerInvariant() == n); }
+        // v1.18: downloads only ever come from the family's own GitHub releases (https://github.com/<repo>/releases/download/...);
+        // the developer test stand-in (HALLOW_SETUP_API) may serve its own files from the same address
+        public static bool AllowedDownload(string url, string repo)
+        {
+            if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(repo)) return false;
+            if (url.StartsWith("https://github.com/" + repo + "/releases/download/", StringComparison.OrdinalIgnoreCase) && !url.Contains("..")) return true;
+            return TestMode && url.StartsWith(Api + "/", StringComparison.OrdinalIgnoreCase);
+        }
 
         static string Env(string n) { var v = Environment.GetEnvironmentVariable(n); return string.IsNullOrEmpty(v) ? null : v; }
         public static string Api { get { return (Env("HALLOW_SETUP_API") ?? "https://api.github.com").TrimEnd('/'); } }
@@ -124,6 +158,8 @@ namespace HallowSetup
                 try { var r = LatestRelease(a); object t; if (r.TryGetValue("tag_name", out t)) a.Latest = Ver(t as string); } catch { }
         }
 
+        // v1.18: the newest release of the parts that aren't Windows apps (shown only)
+        public static void CheckOthers() { foreach (var o in Others) try { var r = LatestReleaseOf(o.Repo); object t; if (r.TryGetValue("tag_name", out t)) o.Latest = Ver(t as string); } catch { } }
         // ---- install / update: download, check the SHA-256 GitHub gives for the zip, unpack, run the app's installer as you.
         // Returns a sentence for the window. progress gets short steps.
         public static string Install(HallowApp a, Action<string> progress)
@@ -138,6 +174,7 @@ namespace HallowSetup
             if (!Regex.IsMatch(sha, "^[0-9a-fA-F]{64}$")) return "GitHub didn't give a checksum for the " + a.Title + " download - not installed.";
             var url = asset.ContainsKey("browser_download_url") ? asset["browser_download_url"] as string : null;
             if (url == null) return "The latest " + a.Title + " release has no download link.";
+            if (!AllowedDownload(url, a.Repo)) return "The " + a.Title + " download isn't from its own GitHub releases - not installed.";   // v1.18
             var tmp = Path.Combine(Path.GetTempPath(), "hallow-setup-" + a.Name.ToLowerInvariant() + "-" + Guid.NewGuid().ToString("N").Substring(0, 8));
             Directory.CreateDirectory(tmp); var zip = Path.Combine(tmp, "download.zip");
             bool keep = false;
@@ -183,6 +220,8 @@ namespace HallowSetup
             }
             finally { if (!keep) try { Directory.Delete(tmp, true); } catch { } }
         }
+        // v1.18: did Install() work? ("... not installed." also contains "installed" - the window used to show those in green)
+        public static bool Succeeded(string msg) { return msg != null && (msg.EndsWith(" is installed.") || msg.Contains("installer is running") || msg.Contains("'s installer is running") || msg.Contains("test run")); }
         // ---- v1.1: install several apps one after another (Toolkit last, since it asks for admin). One line per app.
         public static List<string> InstallMany(IEnumerable<HallowApp> apps, Action<string> progress)
         {
@@ -214,6 +253,7 @@ namespace HallowSetup
             if (!Regex.IsMatch(sha, "^[0-9a-fA-F]{64}$")) return "GitHub didn't give a checksum for the Hallow Setup download - not updated.";
             var tmp = Path.Combine(Path.GetTempPath(), "hallow-setup-self-" + Guid.NewGuid().ToString("N").Substring(0, 8)); Directory.CreateDirectory(tmp);
             var zip = Path.Combine(tmp, "download.zip");
+            if (!AllowedDownload(asset.ContainsKey("browser_download_url") ? asset["browser_download_url"] as string : null, Self.Repo)) { try { Directory.Delete(tmp, true); } catch { } return "The Hallow Setup download isn't from its own GitHub releases - not updated."; }
             progress("Downloading Hallow Setup...");
             try { using (var wc = new WebClient()) { wc.Headers["User-Agent"] = "HallowSetup"; wc.DownloadFile(asset["browser_download_url"] as string, zip); } }
             catch (Exception e) { try { Directory.Delete(tmp, true); } catch { } return "Download failed: " + e.Message; }

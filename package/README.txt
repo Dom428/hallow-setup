@@ -6,7 +6,7 @@ HOW TO USE
 3. Double-click HallowSetup.exe (no admin needed, nothing to install)
 
 WHAT IT DOES
-- Shows every Hallow app (Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser, VPN, Torrents, Financials, Home, Email, Toolkit) and the Hallow
+- Shows every Hallow app (Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser, VPN, Torrents, Financials, Home, Email, Gear, Toolkit) and the Hallow
   Shield browser extension, with the version on your PC and the newest one.
 - Install / Update downloads that app's release from GitHub only when you click, checks it against
   GitHub's SHA-256 checksum, and runs the app's own installer as you (never as admin).
@@ -23,6 +23,13 @@ HALLOW SHIELD (BROWSER EXTENSION)
 - Uninstall moves the folder to the Recycle Bin; remove Shield's card in the browser yourself.
 - Shield 1.6 and newer: Setup also registers the Hallow family bridge for your user (no admin), so Hallow Hub and
   Remote can show what Shield blocked - only once you turn on "Share counts with Hallow apps on this PC" in Shield.
+
+WHAT'S NEW IN 1.18
+- Hallow Hub and Hallow Remote can hand one app to Setup: HallowSetup.exe --install <App> (or --update <App>,
+  --list). Add --quiet for no window.
+- Hallow Gear is in the list. Hallow Places (on your NAS) and Hallow Authenticator (on your phone) are shown with a link.
+- The window can be resized and maximised; the app list scrolls on small screens.
+- Downloads must come from the app's own GitHub releases, as well as match GitHub's checksum.
 
 WHAT'S NEW IN 1.17
 - Hallow Email (a private email client: one inbox for all your accounts, trackers and phishing

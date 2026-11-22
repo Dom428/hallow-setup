@@ -22,6 +22,7 @@
 | **1.15** | Hallow Financials in the list (Dom428/hallow-financials, asset Hallow.Financials.zip; install / update with the checksum check and its own Install.ps1; Start with Windows `HallowFinancials` = `"<exe>" --tray`; wallet icon). Uninstall treats its data like Hallow Keys': the encrypted vault, its backups and settings in %APPDATA%\HallowFinancials are never removed (no "also remove my data" option); only its Windows Hello unlock key (hello.bin) goes to the Recycle Bin |
 | **1.16** | Hallow Home in the list (Dom428/hallow-home, asset Hallow.Home.zip; install / update with the checksum check and its own Install.ps1; Start with Windows `HallowHome` = `"<exe>" --tray`; house icon). Uninstall leaves Home Assistant on the NAS and PicturesHallow Home alone; removing data also recycles %LOCALAPPDATA%HallowHome (the WebView2 live-view cache) |
 | **1.17** | Hallow Email in the list (Dom428/hallow-email, asset Hallow.Email.zip; install / update with the checksum check and its own Install.ps1; Start with Windows `HallowEmail` = `"<exe>" --tray`; envelope icon). Uninstall never touches mail on the servers; "also remove my data" moves the encrypted cache, saved sign-ins and its WebView2 scratch folder (%LOCALAPPDATA%HallowEmail) to the Recycle Bin |
+| **1.18** | Command line for Hub's Install button and Remote (`Cli.cs`): `--install <App>` (window opens and installs it at once; `--quiet` = no window with exit codes 0 / 1 / 2 / 3 Toolkit needs the window / 4 still running; up to date = no download unless `--force`), `--update <App>` (only when installed), `--list [--check] [--json]`, `--out <file>`; names like `hub` / `Hallow Hub`; `Shield` = its Chrome copy. Catalogue: Hallow Gear added (install / update, Start with Windows `HallowGear`, generic uninstall); Places (NAS) and Authenticator (phone PWA) shown in an "Also in the Hallow family" card with their GitHub page, never installed. Downloads must be `https://github.com/<the app's repo>/releases/download/...` (apps, Shield and Setup itself) besides the SHA-256 check. Window: resizable / maximisable (MinWidth 600, MinHeight 400), still capped to the working area; `--snap` adds main-728 renders and the layout numbers. Fix: results containing "not installed" were counted as success. Tests: CLI against a stand-in GitHub on 127.0.0.1 and a temp %LOCALAPPDATA%, the catalogue, the download allowlist, the 1366x768 layout; 5-minute kill timeout |
 
 ## Next
 
@@ -30,7 +31,8 @@
 - Hallow Toolkit's installer through UAC
 - Self-update from the real GitHub release (tested against the stand-in, including a real exe swap in a temp folder)
 - Uninstalling a real app (tested against stand-in apps in a temp folder only). Hallow Hub doesn't answer `quit` on its pipe yet, so Setup asks before closing it
-- The window's height cap and keep-on-screen on a real screen (tested with off-screen renders at 1032 and 728 px only)
+- The window's height cap and keep-on-screen on a real screen (tested with off-screen renders at 1032 and 728 px only), and resizing / maximising it (1.18)
+- `--install <App>` handed over from Hallow Hub / Remote on the real PC (tested against the stand-in GitHub only)
 - Hallow Shield from the real GitHub release, and **Open Chrome / Edge / Brave extensions** really opening each browser's page (the tests never start a browser; if one doesn't open its internal page from the command line, the copied address is the way)
 
 ### Later

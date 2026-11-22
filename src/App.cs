@@ -1,5 +1,5 @@
 ﻿// Hallow Setup - one window to install, update and start-with-Windows the Hallow family:
-// Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser, VPN, Torrents, Financials, Home, Email and Toolkit. Nothing is downloaded until you click Install or Update.
+// Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser, VPN, Torrents, Financials, Home, Email, Gear and Toolkit. Nothing is downloaded until you click Install or Update.
 // v1.3: Uninstall per app (Uninstall.cs, UninstallDialog.cs).
 // v1.4: Hallow Assist in the list.
 // v1.5: Hallow Guard in the list.
@@ -15,6 +15,8 @@
 // v1.15: Hallow Financials in the list; its uninstall never touches its encrypted vault (like Hallow Keys').
 // v1.16: Hallow Home in the list; uninstalling it leaves Home Assistant on the NAS alone (and moves its live-view WebView2 cache to the Recycle Bin with the data).
 // v1.17: Hallow Email in the list; uninstalling it never touches mail on the servers (and moves its WebView2 scratch folder to the Recycle Bin with the data).
+// v1.18: --install / --update <App> and --list for Hub and Remote (Cli.cs); Hallow Gear in the list, Places and Authenticator shown (not Windows apps);
+//       downloads only from the family's own GitHub release addresses; the window can be resized / maximised.
 using System;
 using System.Linq;
 using System.Reflection;
@@ -30,14 +32,14 @@ using System.Windows.Media.Imaging;
 [assembly: AssemblyTitle("Hallow Setup")]
 [assembly: AssemblyProduct("Hallow Setup")]
 [assembly: AssemblyDescription("Install and update the Hallow apps")]
-[assembly: AssemblyVersion("1.17.0.0")]
-[assembly: AssemblyFileVersion("1.17.0.0")]
+[assembly: AssemblyVersion("1.18.0.0")]
+[assembly: AssemblyFileVersion("1.18.0.0")]
 
 namespace HallowSetup
 {
     public static class Program
     {
-        public const string Version = "1.17";
+        public const string Version = "1.18";
         public static string AccentHex = "#F07820";
         static string ThemeXaml;
         // v1.10: Theme.xaml in light or dark with the Hallow accent picked in Hallow Toolkit (if any)
@@ -59,6 +61,10 @@ namespace HallowSetup
             using (var s = Assembly.GetExecutingAssembly().GetManifestResourceStream("HallowSetup.Theme.xaml")) using (var r = new System.IO.StreamReader(s)) xaml = r.ReadToEnd();
             ThemeXaml = xaml;
             app.Resources.MergedDictionaries.Add(LoadTheme(Look.CurrentLight()));   // v1.10: light or dark, and the Hallow accent
+            if (Cli.Wants(args))   // v1.18: --list / --install <App> / --update <App> (Cli.cs)
+            {
+                var code = Cli.Run(args); if (code != null) { Environment.ExitCode = code.Value; return; }
+            }
             int ti = Array.IndexOf(args, "--test-install");   // developer tests only (needs the HALLOW_SETUP_API stand-in): install one app, write the result to a file
             if (ti >= 0 && ti + 2 < args.Length && Setup.TestMode)
             {
@@ -109,7 +115,7 @@ namespace HallowSetup
                 Snap.On = true; ApplyTheme(false); var sw = new MainWindow(); sw.SnapAll(args[si + 1]);
                 sw.Redraw(true); sw.SnapAll(System.IO.Path.Combine(args[si + 1], "light")); return;   // the same window switched live
             }
-            var w = new MainWindow(); app.Run(w);
+            var w = new MainWindow(); w.StartWith = Cli.WindowInstall(args); app.Run(w);
         }
     }
 
@@ -119,17 +125,18 @@ namespace HallowSetup
         static SolidColorBrush B(string hex) { return new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)); }
         StackPanel rows; TextBlock status; Button checkBtn, tickedBtn, selfBtn; bool busy;
         ScrollViewer scroll; FrameworkElement stepsPanel; bool scrollToSteps;
+        public string StartWith;   // v1.18: --install <App>: install it as soon as the window is open (asked for by Hub / Remote)
 
         public MainWindow()
         {
-            Title = "Hallow Setup"; Width = 760; SizeToContent = SizeToContent.Height; ResizeMode = ResizeMode.CanMinimize;
+            Title = "Hallow Setup"; Width = 760; SizeToContent = SizeToContent.Height; ResizeMode = ResizeMode.CanResize; MinWidth = 600; MinHeight = 400;   // v1.18: resizable / maximisable
             Background = (Brush)FindResource("Bg"); Foreground = (Brush)FindResource("Text"); FontFamily = new FontFamily("Segoe UI"); FontSize = 12.5;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             try { Icon = AppIcon(); } catch { }
             SourceInitialized += (s, e) => { Look.TitleBar(this); FitToScreen(); };
             SizeChanged += (s, e) => KeepOnScreen();   // v1.8: taller content (the Shield steps) never pushes the window off the screen
             Content = Build(); Refresh();
-            if (!Snap.On) Loaded += (s, e) => Check();
+            if (!Snap.On) Loaded += (s, e) => { if (StartWith != null) InstallNamed(StartWith); else Check(); };
             if (!Snap.On)   // v1.10: light / dark (and the accent) change live: theme.json, Setup's Look and Windows' setting, checked every 2 s
             {
                 var tm = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
@@ -225,6 +232,7 @@ namespace HallowSetup
             rows.Children.Clear();
             foreach (var a in Setup.Apps) rows.Children.Add(Row(a));
             rows.Children.Add(ShieldRow());
+            rows.Children.Add(OthersRow());   // v1.18
             UpdateTickedButton();
             if (scrollToSteps && stepsPanel != null) { scrollToSteps = false; var el = stepsPanel; Dispatcher.BeginInvoke(new Action(() => ScrollIntoView(el)), System.Windows.Threading.DispatcherPriority.Loaded); }
             if (selfBtn != null) { selfBtn.Visibility = Setup.SelfNewer() ? Visibility.Visible : Visibility.Collapsed; selfBtn.Content = "Update Hallow Setup to " + Setup.Show(Setup.Self.Latest); selfBtn.IsEnabled = !busy; }
@@ -247,7 +255,7 @@ namespace HallowSetup
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
                     busy = false; checkBtn.IsEnabled = true; foreach (var a in list) a.Ticked = false; Refresh();
-                    var bad = res.Count(r => !(r.Contains("installed") || r.Contains("running") || r.Contains("test run")));
+                    var bad = res.Count(r => !Setup.Succeeded(r));
                     Say(bad == 0 ? "Done: " + string.Join("  ", res) : bad + " of " + res.Count + " didn't install: " + string.Join("  ", res), bad > 0);
                 }));
             }) { IsBackground = true }.Start();
@@ -334,6 +342,31 @@ namespace HallowSetup
             return img;
         }
         void Say(string text, bool bad) { lastBad = bad; status.Text = text; status.Foreground = bad ? B(Look.Amber) : B(Look.Green); }
+
+        // ---- v1.18: the family parts that aren't Windows apps (Places on the NAS, Authenticator on the phone): listed, with their page
+        UIElement OthersRow()
+        {
+            var card = new Border { Background = (Brush)FindResource("Panel"), CornerRadius = new CornerRadius(10), Padding = new Thickness(14, 10, 14, 10), Margin = new Thickness(0, 0, 0, 8) };
+            var sp = new StackPanel();
+            sp.Children.Add(new TextBlock { Text = "Also in the Hallow family - not Windows apps, so nothing to install here", FontWeight = FontWeights.SemiBold, Margin = new Thickness(28, 0, 0, 6) });
+            foreach (var o in Setup.Others)
+            {
+                var oo = o; var dp = new DockPanel { Margin = new Thickness(0, 4, 0, 4) };
+                var spacer = new Border { Width = 16, Margin = new Thickness(0, 0, 12, 0) }; DockPanel.SetDock(spacer, Dock.Left); dp.Children.Add(spacer);
+                var icon = AppIconFor(o.Name, o.Icon); icon.Margin = new Thickness(0, 0, 12, 0); icon.VerticalAlignment = VerticalAlignment.Center; DockPanel.SetDock(icon, Dock.Left); dp.Children.Add(icon);
+                var btn = new Button { Content = "Open its page", Style = (Style)FindResource("Btn"), MinWidth = 108, VerticalAlignment = VerticalAlignment.Center, ToolTip = o.Url };
+                btn.Click += (s, e) => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(oo.Url) { UseShellExecute = true }); } catch (Exception ex) { Say("Couldn't open " + oo.Url + ": " + ex.Message, true); } };
+                DockPanel.SetDock(btn, Dock.Right); dp.Children.Add(btn);
+                var mid = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
+                var name = new TextBlock { FontSize = 14 }; name.Inlines.Add(new System.Windows.Documents.Run(o.Title) { FontWeight = FontWeights.SemiBold });
+                name.Inlines.Add(new System.Windows.Documents.Run(o.Kind == "server" ? "  On your NAS" : "  On your phone") { Foreground = (Brush)FindResource("Muted"), FontSize = 12 });
+                if (o.Latest != null) name.Inlines.Add(new System.Windows.Documents.Run("  -  latest " + Setup.Show(o.Latest)) { Foreground = (Brush)FindResource("Muted"), FontSize = 12 });
+                mid.Children.Add(name);
+                mid.Children.Add(new TextBlock { Text = o.Desc, Foreground = (Brush)FindResource("Muted"), TextWrapping = TextWrapping.Wrap });
+                dp.Children.Add(mid); sp.Children.Add(dp);
+            }
+            card.Child = sp; return card;
+        }
 
         // ---- v1.6: Hallow Shield, the browser extension: its unpacked folder, and the steps to load it in a browser
         bool shieldSteps;
@@ -488,7 +521,7 @@ namespace HallowSetup
             if (busy) return; busy = true; checkBtn.IsEnabled = false; Say("Checking GitHub for the newest versions...", false); status.Foreground = (Brush)FindResource("Muted");
             new Thread(() =>
             {
-                Setup.CheckLatest(); Setup.CheckSelf(); Shield.CheckLatest();
+                Setup.CheckLatest(); Setup.CheckSelf(); Shield.CheckLatest(); Setup.CheckOthers();
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
                     foreach (var a in Setup.Apps) if (a.UpdateAvailable) a.Ticked = true;   // updates are ticked for Install ticked
@@ -510,10 +543,26 @@ namespace HallowSetup
             new Thread(() =>
             {
                 string msg; bool ok;
-                try { msg = Setup.Install(a, p => Dispatcher.BeginInvoke(new Action(() => { status.Text = p; status.Foreground = (Brush)FindResource("Muted"); }))); ok = msg.Contains("installed") || msg.Contains("running") || msg.Contains("test run"); }
+                try { msg = Setup.Install(a, p => Dispatcher.BeginInvoke(new Action(() => { status.Text = p; status.Foreground = (Brush)FindResource("Muted"); }))); ok = Setup.Succeeded(msg); }
                 catch (Exception e) { msg = "Install failed: " + e.Message; ok = false; }
                 Dispatcher.BeginInvoke(new Action(() => { busy = false; checkBtn.IsEnabled = true; Refresh(); Say(msg, !ok); }));
             }) { IsBackground = true }.Start();
+        }
+
+        // ---- v1.18: --install <App> from Hub / Remote: the same as clicking its Install / Update button (Shield: its Chrome copy)
+        void InstallNamed(string name)
+        {
+            var c = Cli.Check(name, false);
+            if (c != null) { Say(c.Item2, true); return; }
+            var a = Setup.Find(name);
+            if (a == null) { Say("Installing Hallow Shield (asked for by another Hallow app)...", false); InstallShield("chrome"); return; }
+            Say((a.Installed ? "Updating " : "Installing ") + a.Title + " (asked for by another Hallow app)...", false);
+            Install(a); ScrollTo(a);
+        }
+        void ScrollTo(HallowApp a)
+        {
+            var i = Setup.Apps.IndexOf(a); if (i < 0 || i >= rows.Children.Count) return; var el = rows.Children[i] as FrameworkElement;
+            Dispatcher.BeginInvoke(new Action(() => ScrollIntoView(el)), System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
         // ---- v1.3: uninstall one app (asks first; settings and data only when ticked, to the Recycle Bin)
@@ -565,6 +614,15 @@ namespace HallowSetup
             if (Setup.TestMode) { Setup.CheckLatest(); Setup.CheckSelf(); Shield.CheckLatest(); foreach (var a in Setup.Apps) a.Ticked = a.UpdateAvailable || !a.Installed && !a.IsToolkit; }   // only against the test stand-in, never GitHub
             Refresh(); if (Setup.TestMode) Summary(); else Say("Snapshot - versions on this PC only.", false);
             Snap.Save(this, System.IO.Path.Combine(dir, "main.png"), 760, 0);
+            string layout = null;   // v1.18: what the tests check - the list scrolls and the buttons / footer are inside the 1366x768 window
+            Snap.Save(this, System.IO.Path.Combine(dir, "main-728.png"), 760, 728 - 31, () =>
+            {
+                var root = (Grid)scroll.Parent; Func<FrameworkElement, double> bottomOf = el => el.TransformToAncestor(root).Transform(new Point(0, el.ActualHeight)).Y;
+                layout = "height=" + root.ActualHeight.ToString("0") + " scrollable=" + scroll.ScrollableHeight.ToString("0") + " viewport=" + scroll.ViewportHeight.ToString("0") +
+                    " buttons=" + bottomOf(checkBtn).ToString("0") + " footer=" + bottomOf((FrameworkElement)root.Children[root.Children.Count - 1]).ToString("0") + " rows=" + rows.Children.Count;
+            });
+            if (layout != null) System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "layout-728.txt"), layout);   // v1.18: on a 1366x768 screen (728 px working area less the title bar): the list scrolls, the buttons stay
+            Snap.Save(this, System.IO.Path.Combine(dir, "main-728-end.png"), 760, 728 - 31, () => { scroll.UpdateLayout(); scroll.ScrollToEnd(); });
             // v1.6: the Shield row with its "load it in your browser" steps
             if (Shield.Installed("chrome")) { Shield.JustInstalled = true; Refresh(); Say("Hallow Shield " + Setup.Show(Shield.InstalledVersion("chrome")) + " for Chrome / Edge / Brave is in " + Shield.Dir("chrome") + ".", false); Snap.Save(this, System.IO.Path.Combine(dir, "shield.png"), 760, 0);
                 // v1.8: as on a 1920x1080 screen (1032 px working area) and a 1366x768 one (728 px), less the title bar: the list scrolls, the steps in view

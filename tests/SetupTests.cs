@@ -16,7 +16,9 @@ namespace HallowSetup.Tests
         public static int Main()
         {
             var tmp = Path.Combine(Path.GetTempPath(), "hallow-setup-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(tmp);
-            try { Mode(tmp); Files(tmp); Colours(); ThemeXaml(); NoHardCoded(); LightContrast(); }
+            // v1.18: 5-minute kill timeout - a stand-in or a child process that hangs can't hang the build
+            new System.Threading.Thread(() => { System.Threading.Thread.Sleep(TimeSpan.FromMinutes(5)); Console.WriteLine("FAIL the tests took longer than 5 minutes - killed"); Environment.Exit(3); }) { IsBackground = true }.Start();
+            try { Mode(tmp); Files(tmp); Colours(); ThemeXaml(); NoHardCoded(); LightContrast(); CliTests(tmp); }
             catch (Exception e) { fail++; Console.WriteLine("FAIL exception " + e); }
             finally { try { Directory.Delete(tmp, true); } catch { } }
             Console.WriteLine(pass + " passed, " + fail + " failed");

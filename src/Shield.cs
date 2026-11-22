@@ -91,6 +91,7 @@ namespace HallowSetup
             if (Sha256Of(digest) == null) return "GitHub didn't give a checksum for " + want + " - not installed.";
             var url = asset.ContainsKey("browser_download_url") ? asset["browser_download_url"] as string : null;
             if (url == null) return "The latest Hallow Shield release has no download link.";
+            if (!Setup.AllowedDownload(url, Repo)) return "The Hallow Shield download isn't from its own GitHub releases - not installed.";   // v1.18
             var tmp = Path.Combine(Path.GetTempPath(), "hallow-setup-shield-" + Guid.NewGuid().ToString("N").Substring(0, 8));
             Directory.CreateDirectory(tmp);
             try
