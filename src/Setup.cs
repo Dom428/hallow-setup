@@ -28,7 +28,8 @@ namespace HallowSetup
         // v1.11: Hallow Browser runs only while its window is open - no tray, no Start with Windows
         // v1.21: Hallow Files too (a windowed file manager - no tray icon, no Start with Windows anywhere)
         // v1.22: Hallow Paint, Hallow Notes and Hallow Uninstall too (windowed apps that start with their window; Hallow Net has a tray and starts with --tray)
-        public bool NoTray { get { return Name == "Browser" || Name == "Files" || Name == "Paint" || Name == "Notes" || Name == "Uninstall"; } }
+        // v1.23: Hallow Doctor and Hallow Fonts too (normal windows, no tray icon); Hallow Updates, Switch and Clock start with "--tray"
+        public bool NoTray { get { return Name == "Browser" || Name == "Files" || Name == "Paint" || Name == "Notes" || Name == "Uninstall" || Name == "Doctor" || Name == "Fonts"; } }
         public string Title { get { return "Hallow " + Name; } }
         public string Repo { get { return "Dom428/hallow-" + Name.ToLowerInvariant(); } }
         public bool Ticked;   // v1.1: picked for "Install ticked"
@@ -58,7 +59,7 @@ namespace HallowSetup
         }
         public void SetStartWithWindows(bool on)
         {
-            if (IsToolkit || NoTray) return;   // v1.21: never for a windowed app (Browser, Files; v1.22: Paint, Notes, Uninstall)
+            if (IsToolkit || NoTray) return;   // v1.21: never for a windowed app (Browser, Files; v1.22: Paint, Notes, Uninstall; v1.23: Doctor, Fonts)
             using (var k = Registry.CurrentUser.CreateSubKey(Setup.RunKey))
             {
                 if (on) k.SetValue("Hallow" + Name, "\"" + Exe + "\" --tray"); else k.DeleteValue("Hallow" + Name, false);
@@ -104,6 +105,11 @@ namespace HallowSetup
             new HallowApp { Name = "Paint",   Icon = "tool-brush",    Desc = "A better Paint: layers, real brushes, selections, adjustments and quick edits - it never changes which app opens your pictures" },   // v1.22
             new HallowApp { Name = "Notes",   Icon = "file-lines",    Desc = "A fast text and code editor: tabs, highlighting for many languages, find in files, compare, and unsaved tabs kept between sessions" },   // v1.22
             new HallowApp { Name = "Uninstall", Icon = "broom",       Desc = "Removes apps completely, leftovers included - finds drivers, services and folders Windows forgot" },   // v1.22
+            new HallowApp { Name = "Doctor",  Icon = "stethoscope",   Desc = "A crash and PC-health checkup in plain words - blue screens explained, dumps analysed, patterns found" },   // v1.23
+            new HallowApp { Name = "Updates", Icon = "arrows-rotate", Desc = "Every app update in one place with Windows' own winget - Store apps too, never during a game, nothing installed until you pick it" },   // v1.23
+            new HallowApp { Name = "Switch",  Icon = "window-restore", Desc = "A better Alt+Tab: live thumbnails of every window, type to search, most recently used first - Alt+` (the key under Esc). Replace Alt+Tab is off by default (in its Settings)" },   // v1.23
+            new HallowApp { Name = "Clock",   Icon = "clock",         Desc = "Timers, alarms, a stopwatch and quick reminders that work around your games - never a pop-up over a game" },   // v1.23
+            new HallowApp { Name = "Fonts",   Icon = "font",          Desc = "A better font manager: live previews, compare, install fonts just for you (no admin) and clean out duplicates" },   // v1.23
             new HallowApp { Name = "Toolkit", Icon = "bolt",          Desc = "One-click PC tune-up, monitoring, gaming and clean-up tools (installs as admin)" },
         };
 

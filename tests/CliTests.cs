@@ -388,13 +388,129 @@ namespace HallowSetup.Tests
             return null;
         }
 
+        // v1.23: Hallow Doctor, Updates, Switch, Clock and Fonts - the catalogue, their icons, Start with Windows (Updates, Switch, Clock), the
+        // uninstall order (always "<exe> --cmd quit" first), each app's "busy" answer (Doctor / Fonts "error busy", Updates "error busy
+        // updating" = wait, nothing removed), and what "Also remove my settings and data" takes (Doctor's dumps and reports, Updates' history,
+        // Clock's alarms, Fonts' collections - the dialog says so). Test mode on temp folders only: the apps' exes are never run
+        // (Uninstaller.CmdReply records the line, TestCmdReply is the answer), recycles are only recorded, the registry keys are made-up names
+        // under HKCU that don't exist (read / delete-if-there only - nothing is written).
+        static void NewApps123(string tmp)
+        {
+            var doc = Setup.Find("Doctor"); var upd = Setup.Find("hallow updates"); var sw = Setup.Find("HallowSwitch"); var clk = Setup.Find("Hallow Clock"); var fon = Setup.Find("fonts");
+            var five = new[] { doc, upd, sw, clk, fon };
+            Ok(five.All(a => a != null) && doc.Repo == "Dom428/hallow-doctor" && upd.Repo == "Dom428/hallow-updates" && sw.Repo == "Dom428/hallow-switch" && clk.Repo == "Dom428/hallow-clock" && fon.Repo == "Dom428/hallow-fonts", "1.23: Doctor, Updates, Switch, Clock and Fonts in the catalogue with their repos");
+            if (five.Any(a => a == null)) return;
+            Ok(doc.Icon == "stethoscope" && upd.Icon == "arrows-rotate" && sw.Icon == "window-restore" && clk.Icon == "clock" && fon.Icon == "font" && five.All(a => Icons.Get(a.Icon) != null), "1.23: icons stethoscope / arrows-rotate / window-restore / clock / font, path data in Icons.g.cs");
+            var un = Setup.Find("Uninstall"); int iU = Setup.Apps.IndexOf(un);
+            Ok(Enumerable.Range(0, 5).All(k => Setup.Apps.IndexOf(five[k]) == iU + 1 + k) && Setup.Apps.IndexOf(fon) < Setup.Apps.IndexOf(Setup.Find("Toolkit")) && five.All(a => !a.IsToolkit), "1.23: after Uninstall, before Toolkit");
+            Ok(doc.Desc.Contains("crash") && upd.Desc.Contains("winget") && sw.Desc.Contains("Alt+Tab") && sw.Desc.Contains("off by default") && clk.Desc.Contains("alarms") && fon.Desc.Contains("no admin"), "1.23: descriptions (Switch says Replace Alt+Tab is off by default)");
+            Ok(five.All(a => a.Exe.EndsWith(@"Programs\Hallow " + a.Name + @"\Hallow" + a.Name + ".exe")), "1.23: installed to %LOCALAPPDATA%\\Programs\\Hallow <App>\\Hallow<App>.exe (the release zip's top folder)");
+            foreach (var a in five)
+            {
+                var n = a.Name.ToLowerInvariant();
+                var pf = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\src\icons\" + n + ".png")); byte[] png = File.Exists(pf) ? File.ReadAllBytes(pf) : null;
+                Ok(png != null && png.Length > 24 && png[0] == 0x89 && png[1] == (byte)'P' && (png[16] << 24 | png[17] << 16 | png[18] << 8 | png[19]) == 64 && (png[20] << 24 | png[21] << 16 | png[22] << 8 | png[23]) == 64, "1.23: src\\icons\\" + n + ".png is there (64 x 64 PNG like the others)");
+                var ico = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\..\Hallow" + a.Name + @"\src\hallow.ico"));
+                if (File.Exists(ico) && png != null) Ok(IcoFrame(File.ReadAllBytes(ico), 64) != null && IcoFrame(File.ReadAllBytes(ico), 64).SequenceEqual(png), "1.23: " + n + ".png is the 64 px frame of Hallow " + a.Name + "'s own hallow.ico");
+            }
+            // Start with Windows: Updates, Switch and Clock start in the tray (--tray, Setup's switch); Doctor and Fonts are windowed - none
+            Ok(doc.NoTray && fon.NoTray && !upd.NoTray && !sw.NoTray && !clk.NoTray, "1.23: Start with Windows - Updates, Switch, Clock yes (--tray); Doctor, Fonts no (NoTray, windowed)");
+            Ok(five.All(a => Uninstaller.QuitByCmdFirst(a) && Uninstaller.QuitAlways(a)) && five.All(a => Uninstaller.QuitWaitMs(a) == 15000) && five.All(a => !Uninstaller.NeverForced(a)), "1.23: all five hear \"--cmd quit\" first, always; 15 s wait; none is the never-forced Hallow Uninstall");
+            // each app's own busy answer to quit
+            Ok(Uninstaller.IsBusyReply(doc, "error busy") && Uninstaller.IsBusyReply(fon, " error busy\r") && Uninstaller.IsBusyReply(upd, "error busy updating") && !Uninstaller.IsBusyReply(upd, "error busy")
+                && !Uninstaller.IsBusyReply(doc, "ok") && !Uninstaller.IsBusyReply(doc, "error busybody") && !Uninstaller.IsBusyReply(clk, "error busy") && !Uninstaller.IsBusyReply(sw, "error busy") && !Uninstaller.IsBusyReply(fon, null) && !Uninstaller.IsBusyReply(null, "error busy"), "1.23: busy = Doctor / Fonts \"error busy\", Updates \"error busy updating\" (not Clock or Switch, not \"ok\")");
+            Ok(Uninstaller.IsBusyReply(un, "error busy removing") && !Uninstaller.IsBusyReply(un, "error busy"), "1.23: Hallow Uninstall's rule is unchanged (only \"error busy removing\")");
+
+            var names = new[] { "HALLOW_SETUP_API", "HALLOW_SETUP_LOCAL", "HALLOW_SETUP_RUNKEY", "HALLOW_SETUP_APPDATA", "HALLOW_SETUP_PROGRAMS", "HALLOW_SETUP_DESKTOP", "HALLOW_SETUP_PROGRAMDATA", "HALLOW_SETUP_REGROOT", "HALLOW_SETUP_PIPE" };
+            var keep = names.ToDictionary(n => n, n => Environment.GetEnvironmentVariable(n));
+            var root = Path.Combine(tmp, "apps123"); var lo = Path.Combine(root, "local"); var ad = Path.Combine(root, "appdata"); var sm = Path.Combine(root, "startmenu"); var dt = Path.Combine(root, "desktop"); var pd = Path.Combine(root, "programdata");
+            var fake = "HallowSetupTest-" + Guid.NewGuid().ToString("N");   // never created: every registry step finds nothing there
+            try
+            {
+                foreach (var d in new[] { lo, ad, sm, dt, pd }) Directory.CreateDirectory(d);
+                var vals = new Dictionary<string, string> { { "HALLOW_SETUP_API", "http://127.0.0.1:9/unused" }, { "HALLOW_SETUP_LOCAL", lo }, { "HALLOW_SETUP_RUNKEY", @"Software\" + fake + @"\Run" }, { "HALLOW_SETUP_APPDATA", ad },
+                    { "HALLOW_SETUP_PROGRAMS", sm }, { "HALLOW_SETUP_DESKTOP", dt }, { "HALLOW_SETUP_PROGRAMDATA", pd }, { "HALLOW_SETUP_REGROOT", @"Software\" + fake }, { "HALLOW_SETUP_PIPE", fake } };
+                foreach (var kv in vals) Environment.SetEnvironmentVariable(kv.Key, kv.Value);
+                Ok(Setup.TestMode && Uninstaller.TestGuard() == null, "1.23: test mode with every place pointing at temp folders / made-up keys");
+                Ok(five.All(a => !a.StartsWithWindows), "1.23: no Start with Windows value read for any of them (the made-up key)");
+                Ok(Uninstaller.LocalDataDir(doc) == Path.Combine(lo, "HallowDoctor") && Uninstaller.LocalDataDir(upd) == Path.Combine(lo, "HallowUpdates") && Uninstaller.LocalDataDir(fon) == Path.Combine(lo, "HallowFonts")
+                    && Uninstaller.LocalDataDir(sw) == null && Uninstaller.LocalDataDir(clk) == null && five.All(a => Uninstaller.DataDir(a) == Path.Combine(ad, "Hallow" + a.Name)), "1.23: data folders - %APPDATA%\\Hallow<App>; Doctor's dumps, Updates' history and Fonts' plans in %LOCALAPPDATA%");
+                // the dialog's words: the notes, the tick box's line and the Recycle Bin footer say what each app's data includes
+                var dn = Uninstaller.KeptNote(doc); var un2 = Uninstaller.KeptNote(upd); var sn = Uninstaller.KeptNote(sw); var cn = Uninstaller.KeptNote(clk); var fn = Uninstaller.KeptNote(fon);
+                Ok(dn != null && dn.Contains("quit first") && dn.Contains("wait") && dn.Contains("analysis reports") && dn.Contains(Uninstaller.LocalDataDir(doc)) && dn.Contains("never starts its admin helper"), "1.23: Doctor's note - quit first, wait while busy, dumps and reports stay unless ticked, helper never started");
+                Ok(un2 != null && un2.Contains("quit first") && un2.Contains("wait") && un2.Contains("history of updates") && un2.Contains("apps it updated stay"), "1.23: Updates' note - wait while it installs, history stays unless ticked, the apps it updated stay");
+                Ok(sn != null && sn.Contains("quit first") && sn.Contains("Alt+Tab"), "1.23: Switch's note - quit first so its Alt+Tab hook comes out");
+                Ok(cn != null && cn.Contains("quit first") && cn.Contains("alarms") && cn.Contains(Uninstaller.DataDir(clk)), "1.23: Clock's note - quit first so alarms are saved, they stay unless ticked");
+                Ok(fn != null && fn.Contains("stay installed") && fn.Contains("collections") && fn.Contains("wait"), "1.23: Fonts' note - installed fonts stay, collections stay unless ticked, wait while busy");
+                Ok(UninstallDialog.DataText(doc).Contains(Path.Combine(lo, "HallowDoctor")) && UninstallDialog.DataText(doc).Contains("analysis reports") && UninstallDialog.DataText(upd).Contains("history of updates")
+                    && UninstallDialog.DataText(clk) == Uninstaller.DataDir(clk) + " - including your alarms, timers and reminders" && UninstallDialog.DataText(fon).Contains("collections") && UninstallDialog.DataText(fon).Contains(Path.Combine(lo, "HallowFonts"))
+                    && UninstallDialog.DataText(sw) == Uninstaller.DataDir(sw) && UninstallDialog.DataText(paintOf()) == Uninstaller.DataDir(paintOf()), "1.23: the tick box's line names Doctor's dumps / reports, Updates' history, Clock's alarms, Fonts' collections");
+                Ok(UninstallDialog.FooterText(doc).Contains("Recycle Bin") && UninstallDialog.FooterText(doc).Contains("analysis reports") && UninstallDialog.FooterText(upd).Contains("history of updates") && UninstallDialog.FooterText(clk).Contains("alarms")
+                    && UninstallDialog.FooterText(fon).Contains("collections") && UninstallDialog.FooterText(sw) == "Everything removed goes to the Recycle Bin, so you can get it back." && UninstallDialog.FooterText(Setup.Find("Net")).StartsWith("Everything else removed"), "1.23: the Recycle Bin footer says what the ticked data includes (Clock alarms, Fonts collections, Updates history, Doctor reports)");
+
+                Func<HallowApp, bool, bool, UninstallResult> run = (a, withData, force) =>
+                {
+                    var prog = Path.Combine(lo, "Programs", a.Title); Directory.CreateDirectory(prog); File.WriteAllText(Path.Combine(prog, "Hallow" + a.Name + ".exe"), "not a real exe");
+                    var data = Uninstaller.DataDir(a); Directory.CreateDirectory(data); File.WriteAllText(Path.Combine(data, "settings.json"), "{}");
+                    File.WriteAllText(Path.Combine(sm, a.Title + ".lnk"), "x"); File.WriteAllText(Path.Combine(dt, a.Title + ".lnk"), "x");
+                    lock (Uninstaller.TestLog) Uninstaller.TestLog.Clear();
+                    Uninstaller.RecordRecycle = true;
+                    try { return Uninstaller.Uninstall(a, withData, force, p => { }); } finally { Uninstaller.RecordRecycle = false; }
+                };
+                Func<string> logText = () => string.Join(" | ", Uninstaller.TestLog.Select(l => l.Replace(root, "<tmp>")));
+                // the order for each: "<exe> --cmd quit" first, then the shortcuts and the program folder; settings kept when not ticked
+                foreach (var a in five)
+                {
+                    Uninstaller.TestCmdReply = "ok";
+                    var r = run(a, false, false); var log = Uninstaller.TestLog.ToList(); var prog = Path.Combine(lo, "Programs", a.Title);
+                    int iQuit = log.IndexOf("run Hallow" + a.Name + ".exe --cmd quit"), iProg = log.IndexOf("recycle " + prog), iLnk = log.IndexOf("recycle " + Path.Combine(sm, a.Title + ".lnk"));
+                    Ok(iQuit == 0 && iLnk > iQuit && iProg > iQuit && log.Count(l => l.StartsWith("run ")) == 1 && r.Ok && !r.Busy && !r.StillRunning, "1.23: " + a.Name + " - --cmd quit first, then shortcuts and program folder (" + logText() + ")");
+                    Ok(!log.Contains("recycle " + Uninstaller.DataDir(a)) && r.Message.Contains("Your settings stay in " + Uninstaller.DataDir(a)), "1.23: " + a.Name + " - settings kept when not ticked (" + r.Message.Replace(root, "<tmp>") + ")");
+                    r = run(a, true, false); log = Uninstaller.TestLog.ToList();
+                    Ok(log.IndexOf("recycle " + Uninstaller.DataDir(a)) > log.IndexOf("recycle " + prog) && r.Message.Contains("Settings and data are in the Recycle Bin"), "1.23: " + a.Name + " - ticked: settings to the Recycle Bin after the program folder");
+                }
+                Uninstaller.TestCmdReply = null;
+                // the %LOCALAPPDATA% folders: kept and said so unless ticked, then to the Recycle Bin (never deleted for good)
+                foreach (var a in new[] { doc, upd, fon })
+                {
+                    var ld = Uninstaller.LocalDataDir(a); Directory.CreateDirectory(Path.Combine(ld, "sub")); File.WriteAllText(Path.Combine(ld, "sub", "keep.txt"), "x");
+                    var rk = run(a, false, false); var lk = Uninstaller.TestLog.ToList();
+                    Ok(rk.Ok && !lk.Any(l => l.StartsWith("recycle " + ld)) && File.Exists(Path.Combine(ld, "sub", "keep.txt")) && rk.Message.Contains(Uninstaller.LocalDataWords(a) + (a == doc ? " stay in " : " stays in ") + ld), "1.23: " + a.Name + " not ticked - " + Uninstaller.LocalDataWords(a).ToLowerInvariant() + " stay(s), and the result says where (" + rk.Message.Replace(root, "<tmp>") + ")");
+                    rk = run(a, true, false); lk = Uninstaller.TestLog.ToList();
+                    Ok(lk.IndexOf("recycle " + ld) > lk.IndexOf("recycle " + Path.Combine(lo, "Programs", a.Title)) && rk.Message.Contains(Uninstaller.LocalDataWords(a) + (a == doc ? " are" : " is") + " in the Recycle Bin too") && File.Exists(Path.Combine(ld, "sub", "keep.txt")), "1.23: " + a.Name + " ticked - to the Recycle Bin (only recorded here) after the program folder (" + logText() + ")");
+                }
+                // busy: Doctor / Fonts "error busy", Updates "error busy updating" - stop after quit, remove nothing, say wait (even with force)
+                foreach (var t in new[] { Tuple.Create(doc, "error busy", "crash dumps"), Tuple.Create(fon, "error busy", "fonts"), Tuple.Create(upd, "error busy updating", "installing updates") })
+                    foreach (var force in new[] { false, true })
+                    {
+                        Uninstaller.TestCmdReply = t.Item2;
+                        var rb = run(t.Item1, true, force); var lb = Uninstaller.TestLog.ToList();
+                        Ok(rb.Busy && !rb.Ok && !rb.StillRunning && rb.Message.Contains("wait") && rb.Message.Contains(t.Item3) && rb.Message.Contains("nothing was removed") && lb.Count == 1 && lb[0] == "run Hallow" + t.Item1.Name + ".exe --cmd quit"
+                            && File.Exists(Path.Combine(lo, "Programs", t.Item1.Title, "Hallow" + t.Item1.Name + ".exe")), "1.23: " + t.Item1.Name + " \"" + t.Item2 + "\"" + (force ? " (even with force)" : "") + " - stops after quit, removes nothing, says wait (" + rb.Message + ")");
+                    }
+                // Clock and Switch: a plain "error busy" isn't theirs to say - the uninstall goes on (nothing of theirs runs halfway)
+                Uninstaller.TestCmdReply = "error busy";
+                var rc = run(clk, false, false);
+                Ok(rc.Ok && !rc.Busy && Uninstaller.TestLog.Contains("recycle " + Path.Combine(lo, "Programs", clk.Title)), "1.23: Clock answering \"error busy\" doesn't stop the uninstall (" + logText() + ")");
+                Uninstaller.TestCmdReply = null;
+                Ok(Directory.Exists(Path.Combine(lo, "Programs", doc.Title)) && File.Exists(Path.Combine(Uninstaller.LocalDataDir(doc), "sub", "keep.txt")), "1.23: test mode deleted nothing it only recorded (program folder and Doctor's dumps still on disk)");
+            }
+            finally
+            {
+                Uninstaller.RecordRecycle = false; Uninstaller.TestCmdReply = null;
+                foreach (var kv in keep) Environment.SetEnvironmentVariable(kv.Key, kv.Value);
+            }
+        }
+        static HallowApp paintOf() { return Setup.Find("Paint"); }
+
         static void CliTests(string tmp)        {
             // ---- the catalogue: every current family app or part
             NewApps119(tmp);
             NewApps120(tmp);
             NewApps121(tmp);
             NewApps122(tmp);
-            foreach (var n in new[] { "Hub", "Toolkit", "Mixer", "Overlay", "Remote", "Vault", "Clips", "Keys", "Assist", "Guard", "Tasks", "Browser", "VPN", "Torrents", "Financials", "Email", "Home", "Gear", "Capture", "Display", "Find", "Files", "Net", "Paint", "Notes", "Uninstall" })
+            NewApps123(tmp);
+            foreach (var n in new[] { "Hub", "Toolkit", "Mixer", "Overlay", "Remote", "Vault", "Clips", "Keys", "Assist", "Guard", "Tasks", "Browser", "VPN", "Torrents", "Financials", "Email", "Home", "Gear", "Capture", "Display", "Find", "Files", "Net", "Paint", "Notes", "Uninstall", "Doctor", "Updates", "Switch", "Clock", "Fonts" })
                 Ok(Setup.Find(n) != null && Setup.Find(n).Repo == "Dom428/hallow-" + n.ToLowerInvariant(), "catalogue: Hallow " + n);
             Ok(Shield.Repo == "Dom428/hallow-shield", "catalogue: Hallow Shield (browser extension)");
             Ok(Setup.FindOther("Places") != null && Setup.FindOther("Places").Kind == "server" && Setup.FindOther("Authenticator") != null && Setup.FindOther("Authenticator").Kind == "phone", "catalogue: Places (NAS) and Authenticator (phone) listed, not installable");

@@ -50,7 +50,7 @@ namespace HallowSetup
                 sp.Children.Add(data);
             }
             // v1.20: Capture's clipboard history and Find's file index are deleted for good (said in their notes above; v1.22: Net's history)
-            sp.Children.Add(new TextBlock { Text = a.Name == "Capture" || a.Name == "Find" || a.Name == "Net" ?"Everything else removed goes to the Recycle Bin, so you can get it back." : "Everything removed goes to the Recycle Bin, so you can get it back.", Foreground = muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0) });
+            sp.Children.Add(new TextBlock { Text = FooterText(a), Foreground = muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0) });
             var btns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
             var cancel = new Button { Content = "Cancel", Style = (Style)w.FindResource("Btn"), IsCancel = true, MinWidth = 96, Margin = new Thickness(0, 0, 8, 0) };
             var ok = new Button { Content = "Uninstall", Style = (Style)w.FindResource("Accent"), MinWidth = 108 };
@@ -64,8 +64,24 @@ namespace HallowSetup
         public static string DataText(HallowApp a)
         {
             var d = Uninstaller.DataDir(a); var ld = Uninstaller.LocalDataDir(a);
-            if (ld == null) return d;
-            return d + " and " + ld + (a.Name == "Notes" ? " - including the backups of your unsaved text" : a.Name == "Uninstall" ? " - including its history and registry backups" : "");
+            // v1.23: what's in them for the new apps too - Clock's alarms, Fonts' collections, Updates' history, Doctor's dumps and reports
+            var what = a.Name == "Notes" ? " - including the backups of your unsaved text" : a.Name == "Uninstall" ? " - including its history and registry backups"
+                : a.Name == "Doctor" ? " - including the copied crash dumps, their analysis reports and symbols" : a.Name == "Updates" ? " - including its history of updates"
+                : a.Name == "Fonts" ? " - including your favourites and collections" : a.Name == "Clock" ? " - including your alarms, timers and reminders" : "";
+            return (ld == null ? d : d + " and " + ld) + what;
+        }
+
+        // the line above the buttons: what goes to the Recycle Bin (v1.20: Capture's clipboard history and Find's file index are deleted for
+        // good - said in their notes above; v1.22: Net's history). v1.23: for Doctor, Updates, Clock and Fonts it says what the ticked data
+        // includes, so it's clear what you'd get back from the Recycle Bin
+        public static string FooterText(HallowApp a)
+        {
+            var t = a.Name == "Capture" || a.Name == "Find" || a.Name == "Net" ? "Everything else removed goes to the Recycle Bin, so you can get it back." : "Everything removed goes to the Recycle Bin, so you can get it back.";
+            if (a.Name == "Doctor") t += " With the box ticked, that includes the copied crash dumps and their analysis reports.";
+            else if (a.Name == "Updates") t += " With the box ticked, that includes its history of updates - the apps it updated stay as they are.";
+            else if (a.Name == "Clock") t += " With the box ticked, that includes your alarms, timers and reminders.";
+            else if (a.Name == "Fonts") t += " With the box ticked, that includes your favourites and collections - the fonts you installed stay installed.";
+            return t;
         }
 
         // true = go ahead; withData = the box was ticked

@@ -10,6 +10,10 @@
 // deleted for good, always; Setup never starts or approves Net's admin helper. Hallow Notes' backups of unsaved tabs and Hallow
 // Uninstall's history and registry backups (their %LOCALAPPDATA% folders) go only when you tick "Also remove my settings and data".
 // Hallow Uninstall answers "error busy removing" while it removes an app: Setup then stops and says to wait - it never force-stops it.
+// v1.23: Hallow Doctor, Updates, Switch, Clock and Fonts always hear "<exe> --cmd quit" first too. Doctor ("error busy" while it copies or
+// analyses dumps), Updates ("error busy updating") and Fonts ("error busy" while it installs / removes fonts) make Setup stop and say to
+// wait. Doctor's copied dumps / analysis / symbols, Updates' history and Fonts' working folder (%LOCALAPPDATA%) follow the data tick;
+// Clock's alarms and Fonts' collections are in their %APPDATA% folders. Fonts installed with Hallow Fonts are never touched.
 // Hallow Toolkit installs as admin: Setup only starts its own uninstaller (Windows asks you) or tells you what to do.
 // Developer test overrides (on top of Setup.cs's): HALLOW_SETUP_APPDATA, HALLOW_SETUP_PROGRAMS (Start menu Programs),
 // HALLOW_SETUP_DESKTOP, HALLOW_SETUP_PROGRAMDATA, HALLOW_SETUP_REGROOT (HKCU key the Uninstall / NativeMessagingHosts
@@ -162,13 +166,35 @@ namespace HallowSetup
             if (a.Name == "Paint") return "Setup asks Hallow Paint to quit first, so unsaved pictures are kept in its recovery folder (" + Path.Combine(DataDir(a), "recovery") + ") - they stay with its settings unless you tick \"Also remove my settings and data\". Your pictures are never touched.";
             if (a.Name == "Notes") return "Setup asks Hallow Notes to quit first, so it backs up any unsaved tab. Those backups of your unsaved text (" + Path.Combine(LocalDataDir(a), "backup") + ") are removed ONLY if you tick \"Also remove my settings and data\" - otherwise they stay for a reinstall. Your files are never touched.";
             if (a.Name == "Uninstall") return "Its history and registry backups (" + Path.Combine(LocalDataDir(a), "backups") + ") stay unless you tick \"Also remove my settings and data\" - they're what its \"Restore registry backup\" uses. If it's removing an app right now, Setup stops and asks you to wait - it never stops Hallow Uninstall mid-removal.";
+            // v1.23
+            if (a.Name == "Doctor") return "Setup asks Hallow Doctor to quit first - if it's copying or analysing crash dumps right now, Setup stops and asks you to wait. The copied dumps, their analysis reports and symbols (" + LocalDataDir(a) + ") stay unless you tick \"Also remove my settings and data\". Setup never starts its admin helper, and Windows' own crash dumps are never touched.";
+            if (a.Name == "Updates") return "Setup asks Hallow Updates to quit first - if it's installing updates right now, Setup stops and asks you to wait. The apps it updated stay as they are. Its history of updates (" + LocalDataDir(a) + ") stays unless you tick \"Also remove my settings and data\".";
+            if (a.Name == "Switch") return "Setup asks Hallow Switch to quit first, so it takes its Alt+Tab hook out cleanly if you had turned Replace Alt+Tab on (it's off unless you did, in its Settings) - Windows' own Alt+Tab is back at once.";
+            if (a.Name == "Clock") return "Setup asks Hallow Clock to quit first, so your alarms, timers and reminders are saved - they stay with its settings (" + DataDir(a) + ") unless you tick \"Also remove my settings and data\".";
+            if (a.Name == "Fonts") return "Fonts you installed with Hallow Fonts stay installed - they're ordinary Windows fonts (remove them in Hallow Fonts first if you want them gone). Setup asks it to quit first - if it's installing or removing fonts right now, Setup stops and asks you to wait. Your favourites and collections stay unless you tick \"Also remove my settings and data\".";
             return null;
         }
         // v1.22: a second data folder in %LOCALAPPDATA% that follows "Also remove my settings and data" (null = none): Hallow Notes' backups
         // of unsaved tabs, Hallow Uninstall's history, registry backups and plans
+        // (v1.23: Hallow Doctor's copied crash dumps, analysis reports and symbols; Hallow Updates' history of updates; Hallow Fonts' working
+        // folder for the admin step's plans)
         public static string LocalDataDir(HallowApp a)
         {
-            return a != null && (a.Name == "Notes" || a.Name == "Uninstall") ? Path.Combine(Setup.Local, "Hallow" + a.Name) : null;
+            return a != null && (a.Name == "Notes" || a.Name == "Uninstall" || a.Name == "Doctor" || a.Name == "Updates" || a.Name == "Fonts") ? Path.Combine(Setup.Local, "Hallow" + a.Name) : null;
+        }
+        // v1.23: what's in that folder, for the result line ("... are in the Recycle Bin too" / "... stay in <folder>")
+        public static string LocalDataWords(HallowApp a)
+        {
+            if (a == null) return null;
+            switch (a.Name)
+            {
+                case "Notes": return "The backups of your unsaved tabs";
+                case "Uninstall": return "Its history and registry backups";
+                case "Doctor": return "The copied crash dumps, their analysis reports and symbols";
+                case "Updates": return "Its history of updates";
+                case "Fonts": return "Its working folder";
+            }
+            return null;
         }
         // v1.22: Hallow Net's 24-hour history and timeline (history.csv, timeline.csv - local only, never roams)
         public static string NetHistoryDir() { return Path.Combine(Setup.Local, "HallowNet"); }
@@ -246,7 +272,7 @@ namespace HallowSetup
             {
                 progress("Asking " + a.Title + " to quit...");
                 first = CmdReply(a, "quit", 10000);
-                if (IsBusyReply(first)) return BusyResult(a);
+                if (IsBusyReply(a, first)) return BusyResult(a);   // v1.23: each app's own "busy" (Doctor / Fonts "error busy", Updates "error busy updating")
             }
             if (Processes(a).Length > 0)
             {
@@ -255,7 +281,7 @@ namespace HallowSetup
                 // exits); the pipe only if that didn't answer ok. Never in test mode: "--cmd" would reach the real app's pipe.
                 bool cmdOk = QuitAlways(a) ? first != null && first.StartsWith("ok") : QuitByCmdFirst(a) && RunOwn(a, "--cmd quit", 10000);   // v1.21: test mode records it instead (false = the test pipe next)
                 var q = cmdOk ? "ok" : Send(a, "quit", 3000);
-                if (IsBusyReply(q)) return BusyResult(a);   // v1.22
+                if (IsBusyReply(a, q)) return BusyResult(a);   // v1.22 (v1.23: per app)
                 // v1.19: Hallow Display must hear "quit" (it puts every display change back, then exits) - if its pipe didn't answer,
                 // the same line through its own "--cmd quit" (never in test mode: that would reach the real app's pipe)
                 if (a.Name == "Display" && !(q != null && q.StartsWith("ok")) && !Setup.TestMode) CmdQuit(a);
@@ -374,7 +400,7 @@ namespace HallowSetup
                 var ld = LocalDataDir(a);
                 if (ld != null && why == null && Directory.Exists(ld))
                 {
-                    if (Recycle(ld)) notes.Add(a.Name == "Notes" ? "The backups of your unsaved tabs are in the Recycle Bin too." : "Its history and registry backups are in the Recycle Bin too.");
+                    if (Recycle(ld)) notes.Add(LocalDataWords(a) + (a.Name == "Updates" || a.Name == "Fonts" ? " is" : " are") + " in the Recycle Bin too.");   // v1.23: the words per app
                     else { ok = false; notes.Add("Couldn't remove " + ld + "."); }
                 }
             }
@@ -382,7 +408,7 @@ namespace HallowSetup
             {
                 if (a.Name != "Keys" && a.Name != "Financials" && Directory.Exists(DataDir(a))) notes.Add("Your settings stay in " + DataDir(a) + ".");
                 var ld = LocalDataDir(a);   // v1.22: kept, and said so
-                if (ld != null && Directory.Exists(ld)) notes.Add(a.Name == "Notes" ? "The backups of your unsaved tabs stay in " + ld + "." : "Its history and registry backups stay in " + ld + ".");
+                if (ld != null && Directory.Exists(ld)) notes.Add(LocalDataWords(a) + (a.Name == "Updates" || a.Name == "Fonts" ? " stays in " : " stay in ") + ld + ".");
             }
             var kn = a.Name == "Vault" ? "Your backups are still there." : a.Name == "Clips" ? "Your clips are still there." : a.Name == "Capture" ? "Your captures are still there." : a.Name == "Keys" ? "Your password vault is still in " + DataDir(a) + "." : a.Name == "Financials" ? "Your encrypted finance vault is still in " + DataDir(a) + "." : null;
             if (kn != null) notes.Insert(0, kn);
@@ -402,13 +428,33 @@ namespace HallowSetup
         public static bool QuitByCmdFirst(HallowApp a) { return a != null && (a.Name == "Find" || QuitAlways(a)); }
         // v1.22: apps that hear "<exe> --cmd quit" first even when Setup sees no copy running, with the reply read: Hallow Files (v1.21),
         // Hallow Net (stops its helper), Hallow Paint (unsaved pictures to recovery), Hallow Notes (backs up unsaved tabs), Hallow Uninstall
-        public static bool QuitAlways(HallowApp a) { return a != null && (a.Name == "Files" || a.Name == "Net" || a.Name == "Paint" || a.Name == "Notes" || a.Name == "Uninstall"); }
+        // (v1.23: Hallow Doctor (refuses while it copies / analyses dumps), Updates (while it installs updates), Switch (takes its Alt+Tab hook
+        // out), Clock (saves alarms, timers and reminders), Fonts (refuses while it installs or removes fonts))
+        public static bool QuitAlways(HallowApp a)
+        {
+            return a != null && (a.Name == "Files" || a.Name == "Net" || a.Name == "Paint" || a.Name == "Notes" || a.Name == "Uninstall"
+                || a.Name == "Doctor" || a.Name == "Updates" || a.Name == "Switch" || a.Name == "Clock" || a.Name == "Fonts");
+        }
         // v1.22: never force-stopped, not even after you say yes: Hallow Uninstall (a removal must not stop halfway)
         public static bool NeverForced(HallowApp a) { return a != null && a.Name == "Uninstall"; }
         // v1.22: "error busy removing" - Hallow Uninstall's answer to quit while an uninstall or removal runs
         public static bool IsBusyReply(string reply) { return reply != null && reply.Trim().StartsWith("error busy removing", StringComparison.OrdinalIgnoreCase); }
+        // v1.23: each app's own "busy" answer to quit: Hallow Uninstall "error busy removing" (a plain "error busy" from it isn't a removal),
+        // Hallow Updates "error busy updating", Hallow Doctor and Hallow Fonts a plain "error busy" (copying / analysing dumps, installing /
+        // removing fonts). Any other app's "error busy" isn't a reason to wait here.
+        public static bool IsBusyReply(HallowApp a, string reply)
+        {
+            if (a == null || reply == null) return false;
+            var r = reply.Trim();
+            if (a.Name == "Uninstall") return IsBusyReply(r);
+            if (a.Name == "Updates") return r.StartsWith("error busy updating", StringComparison.OrdinalIgnoreCase);
+            if (a.Name == "Doctor" || a.Name == "Fonts") return string.Equals(r, "error busy", StringComparison.OrdinalIgnoreCase) || r.StartsWith("error busy ", StringComparison.OrdinalIgnoreCase);
+            return false;
+        }
         static UninstallResult BusyResult(HallowApp a)
         {
+            var what = a.Name == "Doctor" ? "is copying or analysing crash dumps" : a.Name == "Updates" ? "is installing updates" : a.Name == "Fonts" ? "is installing or removing fonts" : null;   // v1.23
+            if (what != null) return new UninstallResult { Busy = true, Message = a.Title + " " + what + " right now - wait until it has finished, then click Uninstall again. Setup doesn't stop it halfway, so nothing was removed." };
             return new UninstallResult { Busy = true, Message = a.Title + " is removing an app right now - wait until it has finished, then click Uninstall again. Setup never stops it mid-removal, so nothing was removed." };
         }
         // v1.22: "<exe> --cmd <line>" and the reply it prints ("ok", "error busy removing"), or null when nothing answered (exit code 2 =

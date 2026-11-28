@@ -6,7 +6,7 @@ HOW TO USE
 3. Double-click HallowSetup.exe (no admin needed, nothing to install)
 
 WHAT IT DOES
-- Shows every Hallow app (Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser, VPN, Torrents, Financials, Home, Email, Gear, Capture, Display, Find, Files, Net, Paint, Notes, Uninstall, Toolkit) and the Hallow
+- Shows every Hallow app (Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser, VPN, Torrents, Financials, Home, Email, Gear, Capture, Display, Find, Files, Net, Paint, Notes, Uninstall, Doctor, Updates, Switch, Clock, Fonts, Toolkit) and the Hallow
   Shield browser extension, with the version on your PC and the newest one.
 - Install / Update downloads that app's release from GitHub only when you click, checks it against
   GitHub's SHA-256 checksum, and runs the app's own installer as you (never as admin).
@@ -23,6 +23,16 @@ HALLOW SHIELD (BROWSER EXTENSION)
 - Uninstall moves the folder to the Recycle Bin; remove Shield's card in the browser yourself.
 - Shield 1.6 and newer: Setup also registers the Hallow family bridge for your user (no admin), so Hallow Hub and
   Remote can show what Shield blocked - only once you turn on "Share counts with Hallow apps on this PC" in Shield.
+
+WHAT'S NEW IN 1.23
+- Hallow Doctor, Hallow Updates, Hallow Switch, Hallow Clock and Hallow Fonts are in the list. Updates, Switch and
+  Clock can start with Windows; Doctor and Fonts are windowed apps, so they have no Start with Windows switch.
+  Hallow Switch's "Replace Alt+Tab" is off by default (turn it on in Switch's own Settings if you want it).
+- Uninstalling any of them asks it to quit first. If Doctor is analysing crash dumps, Updates is installing
+  updates or Fonts is installing fonts, Setup tells you to wait and removes nothing.
+- "Also remove my settings and data" says what it takes: Doctor's copied crash dumps and reports, Updates'
+  history, Clock's alarms, timers and reminders, Fonts' favourites and collections (to the Recycle Bin).
+  Fonts you installed with Hallow Fonts stay installed.
 
 WHAT'S NEW IN 1.22
 - Hallow Net, Hallow Paint, Hallow Notes and Hallow Uninstall are in the list. Net can start with Windows;
