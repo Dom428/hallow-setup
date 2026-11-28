@@ -48,7 +48,8 @@ namespace HallowSetup
                 data = new CheckBox { Content = label, IsChecked = false, IsEnabled = blocked == null, Margin = new Thickness(0, 12, 0, 0), VerticalContentAlignment = VerticalAlignment.Top };
                 sp.Children.Add(data);
             }
-            sp.Children.Add(new TextBlock { Text = "Everything removed goes to the Recycle Bin, so you can get it back.", Foreground = muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0) });
+            // v1.20: Capture's clipboard history and Find's file index are deleted for good (said in their notes above)
+            sp.Children.Add(new TextBlock { Text = a.Name == "Capture" || a.Name == "Find" ? "Everything else removed goes to the Recycle Bin, so you can get it back." : "Everything removed goes to the Recycle Bin, so you can get it back.", Foreground = muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0) });
             var btns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
             var cancel = new Button { Content = "Cancel", Style = (Style)w.FindResource("Btn"), IsCancel = true, MinWidth = 96, Margin = new Thickness(0, 0, 8, 0) };
             var ok = new Button { Content = "Uninstall", Style = (Style)w.FindResource("Accent"), MinWidth = 108 };
