@@ -6,7 +6,7 @@ HOW TO USE
 3. Double-click HallowSetup.exe (no admin needed, nothing to install)
 
 WHAT IT DOES
-- Shows every Hallow app (Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser, VPN, Torrents, Financials, Home, Email, Gear, Capture, Display, Find, Files, Toolkit) and the Hallow
+- Shows every Hallow app (Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser, VPN, Torrents, Financials, Home, Email, Gear, Capture, Display, Find, Files, Net, Paint, Notes, Uninstall, Toolkit) and the Hallow
   Shield browser extension, with the version on your PC and the newest one.
 - Install / Update downloads that app's release from GitHub only when you click, checks it against
   GitHub's SHA-256 checksum, and runs the app's own installer as you (never as admin).
@@ -23,6 +23,15 @@ HALLOW SHIELD (BROWSER EXTENSION)
 - Uninstall moves the folder to the Recycle Bin; remove Shield's card in the browser yourself.
 - Shield 1.6 and newer: Setup also registers the Hallow family bridge for your user (no admin), so Hallow Hub and
   Remote can show what Shield blocked - only once you turn on "Share counts with Hallow apps on this PC" in Shield.
+
+WHAT'S NEW IN 1.22
+- Hallow Net, Hallow Paint, Hallow Notes and Hallow Uninstall are in the list. Net can start with Windows;
+  Paint, Notes and Uninstall are windowed apps, so they have no Start with Windows switch.
+- Uninstalling any of them asks it to quit first. Hallow Net's 24-hour history is deleted for good (Setup never
+  starts its admin helper). Hallow Paint keeps unsaved pictures in its recovery folder with its settings.
+  Hallow Notes' backups of your unsaved text are removed ONLY if you tick "Also remove my settings and data".
+  Hallow Uninstall's history and registry backups stay unless you tick that box; if it's removing an app,
+  Setup tells you to wait and never stops it.
 
 WHAT'S NEW IN 1.21
 - Hallow Files (a faster file manager: tabs, dual pane, previews, folder sizes, bulk rename) is in the list.

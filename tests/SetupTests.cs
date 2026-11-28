@@ -20,9 +20,27 @@ namespace HallowSetup.Tests
             new System.Threading.Thread(() => { System.Threading.Thread.Sleep(TimeSpan.FromMinutes(5)); Console.WriteLine("FAIL the tests took longer than 5 minutes - killed"); Environment.Exit(3); }) { IsBackground = true }.Start();
             try { Mode(tmp); Files(tmp); Colours(); ThemeXaml(); NoHardCoded(); LightContrast(); CliTests(tmp); }
             catch (Exception e) { fail++; Console.WriteLine("FAIL exception " + e); }
-            finally { try { Directory.Delete(tmp, true); } catch { } }
+            finally { CleanTemp(tmp); }
             Console.WriteLine(pass + " passed, " + fail + " failed");
             return fail == 0 ? 0 : 1;
+        }
+        // v1.22: the test folder goes file by file (never a recursive delete of a computed path): only inside %TEMP%\hallow-setup-tests-*,
+        // links are removed as links and never followed, then the empty folders bottom-up
+        static void CleanTemp(string tmp)
+        {
+            var root = Path.GetFullPath(Path.GetTempPath());
+            if (tmp == null || !Path.GetFullPath(tmp).StartsWith(Path.Combine(root, "hallow-setup-tests-"), StringComparison.OrdinalIgnoreCase) || !Directory.Exists(tmp)) return;
+            CleanDir(tmp);
+        }
+        static void CleanDir(string dir)
+        {
+            foreach (var sub in Directory.GetDirectories(dir))
+            {
+                bool link = true; try { link = (File.GetAttributes(sub) & FileAttributes.ReparsePoint) != 0; } catch { }
+                if (link) { try { Directory.Delete(sub, false); } catch { } } else CleanDir(sub);
+            }
+            foreach (var f in Directory.GetFiles(dir)) { try { File.SetAttributes(f, FileAttributes.Normal); File.Delete(f); } catch { } }
+            try { Directory.Delete(dir, false); } catch { }
         }
 
         static void Mode(string tmp)

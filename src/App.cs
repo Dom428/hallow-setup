@@ -1,5 +1,5 @@
 ﻿// Hallow Setup - one window to install, update and start-with-Windows the Hallow family:
-// Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser, VPN, Torrents, Financials, Home, Email, Gear, Capture, Display, Find, Files and Toolkit. Nothing is downloaded until you click Install or Update.
+// Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser, VPN, Torrents, Financials, Home, Email, Gear, Capture, Display, Find, Files, Net, Paint, Notes, Uninstall and Toolkit. Nothing is downloaded until you click Install or Update.
 // v1.3: Uninstall per app (Uninstall.cs, UninstallDialog.cs).
 // v1.4: Hallow Assist in the list.
 // v1.5: Hallow Guard in the list.
@@ -23,6 +23,9 @@
 //       for good - its settings (%APPDATA%\HallowFind) follow "Also remove my settings and data" like every app's.
 // v1.21: Hallow Files in the list (no Start with Windows - it's windowed, like Browser); uninstalling it runs "HallowFiles.exe --cmd quit",
 //       then "HallowFiles.exe --undo-default-fm" (File Explorer opens folders again) before the program folder goes.
+// v1.22: Hallow Net (Start with Windows --tray), Hallow Paint, Hallow Notes and Hallow Uninstall (windowed: no Start with Windows) in the list;
+//       each hears "--cmd quit" first when uninstalled. Net's history goes for good; Notes' backups of unsaved text and Uninstall's
+//       registry backups only when "Also remove my settings and data" is ticked; Hallow Uninstall busy removing = wait, never forced.
 using System;
 using System.Linq;
 using System.Reflection;
@@ -38,14 +41,14 @@ using System.Windows.Media.Imaging;
 [assembly: AssemblyTitle("Hallow Setup")]
 [assembly: AssemblyProduct("Hallow Setup")]
 [assembly: AssemblyDescription("Install and update the Hallow apps")]
-[assembly: AssemblyVersion("1.21.0.0")]
-[assembly: AssemblyFileVersion("1.21.0.0")]
+[assembly: AssemblyVersion("1.22.0.0")]
+[assembly: AssemblyFileVersion("1.22.0.0")]
 
 namespace HallowSetup
 {
     public static class Program
     {
-        public const string Version = "1.21";
+        public const string Version = "1.22";
         public static string AccentHex = "#F07820";
         static string ThemeXaml;
         // v1.10: Theme.xaml in light or dark with the Hallow accent picked in Hallow Toolkit (if any)
@@ -592,8 +595,8 @@ namespace HallowSetup
                     busy = false; checkBtn.IsEnabled = true; a.Ticked = false; Refresh();
                     if (r.StillRunning)
                     {
-                        if (MessageBox.Show(this, a.Title + " didn't close when asked.\n\nClose it anyway and uninstall? Anything it hasn't saved yet is lost." + (a.Name == "Files" ? "\n\nHallow Files waits for a copy or move to finish before it closes - closing it now can stop one halfway (Windows keeps what was already copied)." : ""), "Hallow Setup", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes) RunUninstall(a, withData, true);
-                        else Say(a.Title + " is still installed - close it from its tray icon, then click Uninstall again.", true);
+                        if (MessageBox.Show(this, a.Title + " didn't close when asked.\n\nClose it anyway and uninstall? Anything it hasn't saved yet is lost." + (a.Name == "Files" ? "\n\nHallow Files waits for a copy or move to finish before it closes - closing it now can stop one halfway (Windows keeps what was already copied)." : a.Name == "Paint" ? "\n\nHallow Paint puts unsaved pictures in its recovery folder when it quits - closing it now loses the ones it hasn't written yet." : a.Name == "Notes" ? "\n\nHallow Notes backs up unsaved tabs every few seconds - closing it now can lose what you typed since the last backup." : ""), "Hallow Setup", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes) RunUninstall(a, withData, true);
+                        else Say(a.Title + " is still installed - " + (a.NoTray ? "close its window" : "close it from its tray icon") + ", then click Uninstall again.", true);   // v1.22: windowed apps have no tray icon
                         return;
                     }
                     Say(r.Message, !r.Ok);

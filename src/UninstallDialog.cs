@@ -28,7 +28,8 @@ namespace HallowSetup
             if (a.Name == "Mixer") items.Add("Its volume changes: every app goes back to full volume and its normal output");
             items.Add("The program folder (" + Uninstaller.ProgramDir(a) + ")");
             items.Add("Its Start menu shortcut (and Desktop shortcut)");
-            if (!a.NoTray) items.Add("Its Start with Windows entry");   // v1.21: Browser and Files never have one
+            if (!a.NoTray) items.Add("Its Start with Windows entry");   // v1.21: Browser and Files never have one (v1.22: Paint, Notes, Uninstall)
+            if (a.Name == "Net") items.Add("Its 24-hour history and timeline (" + Uninstaller.NetHistoryDir() + ") - deleted for good");   // v1.22
             if (a.Name == "Keys") items.Add("Its browser autofill link (you can remove the extension from your browser)");
             foreach (var t in items)
             {
@@ -44,18 +45,27 @@ namespace HallowSetup
             {
                 var label = new StackPanel();
                 label.Children.Add(new TextBlock { Text = "Also remove my settings and data", Foreground = (Brush)w.FindResource("Text") });
-                label.Children.Add(new TextBlock { Text = blocked ?? Uninstaller.DataDir(a), Foreground = blocked != null ? B(Look.Amber) : muted, FontSize = 11.5, TextWrapping = TextWrapping.Wrap });
+                label.Children.Add(new TextBlock { Text = blocked ?? DataText(a), Foreground = blocked != null ? B(Look.Amber) : muted, FontSize = 11.5, TextWrapping = TextWrapping.Wrap });
                 data = new CheckBox { Content = label, IsChecked = false, IsEnabled = blocked == null, Margin = new Thickness(0, 12, 0, 0), VerticalContentAlignment = VerticalAlignment.Top };
                 sp.Children.Add(data);
             }
-            // v1.20: Capture's clipboard history and Find's file index are deleted for good (said in their notes above)
-            sp.Children.Add(new TextBlock { Text = a.Name == "Capture" || a.Name == "Find" ? "Everything else removed goes to the Recycle Bin, so you can get it back." : "Everything removed goes to the Recycle Bin, so you can get it back.", Foreground = muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0) });
+            // v1.20: Capture's clipboard history and Find's file index are deleted for good (said in their notes above; v1.22: Net's history)
+            sp.Children.Add(new TextBlock { Text = a.Name == "Capture" || a.Name == "Find" || a.Name == "Net" ?"Everything else removed goes to the Recycle Bin, so you can get it back." : "Everything removed goes to the Recycle Bin, so you can get it back.", Foreground = muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0) });
             var btns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
             var cancel = new Button { Content = "Cancel", Style = (Style)w.FindResource("Btn"), IsCancel = true, MinWidth = 96, Margin = new Thickness(0, 0, 8, 0) };
             var ok = new Button { Content = "Uninstall", Style = (Style)w.FindResource("Accent"), MinWidth = 108 };
             ok.Click += (s, e) => { w.DialogResult = true; };
             btns.Children.Add(cancel); btns.Children.Add(ok); sp.Children.Add(btns);
             w.Content = sp; return w;
+        }
+
+        // v1.22: what "Also remove my settings and data" takes - with Hallow Notes' backups of unsaved text and Hallow Uninstall's
+        // registry backups named, since those are the ones you'd miss
+        public static string DataText(HallowApp a)
+        {
+            var d = Uninstaller.DataDir(a); var ld = Uninstaller.LocalDataDir(a);
+            if (ld == null) return d;
+            return d + " and " + ld + (a.Name == "Notes" ? " - including the backups of your unsaved text" : a.Name == "Uninstall" ? " - including its history and registry backups" : "");
         }
 
         // true = go ahead; withData = the box was ticked

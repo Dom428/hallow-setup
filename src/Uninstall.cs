@@ -6,6 +6,10 @@
 // Never touched: Hallow Vault's backup folders, Hallow Clips' video folder, Hallow Keys' password vault.
 // Deleted for good, always (v1.19 / v1.20): Hallow Capture's clipboard history and Hallow Find's file index - private, and nothing to keep.
 // Hallow Files (v1.21) is asked to put File Explorer back as the folder opener ("--undo-default-fm") before its program folder goes.
+// v1.22: Hallow Net, Paint, Notes and Uninstall always hear "<exe> --cmd quit" first. Hallow Net's history (%LOCALAPPDATA%\HallowNet) is
+// deleted for good, always; Setup never starts or approves Net's admin helper. Hallow Notes' backups of unsaved tabs and Hallow
+// Uninstall's history and registry backups (their %LOCALAPPDATA% folders) go only when you tick "Also remove my settings and data".
+// Hallow Uninstall answers "error busy removing" while it removes an app: Setup then stops and says to wait - it never force-stops it.
 // Hallow Toolkit installs as admin: Setup only starts its own uninstaller (Windows asks you) or tells you what to do.
 // Developer test overrides (on top of Setup.cs's): HALLOW_SETUP_APPDATA, HALLOW_SETUP_PROGRAMS (Start menu Programs),
 // HALLOW_SETUP_DESKTOP, HALLOW_SETUP_PROGRAMDATA, HALLOW_SETUP_REGROOT (HKCU key the Uninstall / NativeMessagingHosts
@@ -27,6 +31,7 @@ namespace HallowSetup
     public class UninstallResult
     {
         public string Message; public bool Ok; public bool StillRunning;   // StillRunning: it didn't close - ask before forcing it
+        public bool Busy;   // v1.22: Hallow Uninstall is removing an app right now ("error busy removing") - wait, never force it
     }
 
     public static class Uninstaller
@@ -152,8 +157,21 @@ namespace HallowSetup
             if (a.Name == "Display") return "Any display change it made (a game profile's resolution, refresh rate, HDR or brightness, night mode) is put back first: Setup asks it to quit before anything is removed.";
             if (a.Name == "Find") return "Its file index is removed too, for good (" + FindIndexDir() + " - every file name on this PC; Hallow Find builds it again if you reinstall). Its settings follow \"Also remove my settings and data\".";   // v1.20
             if (a.Name == "Files") return "Folders open in File Explorer again: if you switched \"Open folders with Hallow Files\" on, Setup has Hallow Files put back exactly what it replaced before it's removed. Your files are never touched.";   // v1.21
+            // v1.22
+            if (a.Name == "Net") return "Setup asks Hallow Net to quit first (that stops its per-app helper cleanly) and never starts or approves the helper itself. Its 24-hour history and timeline are deleted for good (" + NetHistoryDir() + "). Its settings follow \"Also remove my settings and data\".";
+            if (a.Name == "Paint") return "Setup asks Hallow Paint to quit first, so unsaved pictures are kept in its recovery folder (" + Path.Combine(DataDir(a), "recovery") + ") - they stay with its settings unless you tick \"Also remove my settings and data\". Your pictures are never touched.";
+            if (a.Name == "Notes") return "Setup asks Hallow Notes to quit first, so it backs up any unsaved tab. Those backups of your unsaved text (" + Path.Combine(LocalDataDir(a), "backup") + ") are removed ONLY if you tick \"Also remove my settings and data\" - otherwise they stay for a reinstall. Your files are never touched.";
+            if (a.Name == "Uninstall") return "Its history and registry backups (" + Path.Combine(LocalDataDir(a), "backups") + ") stay unless you tick \"Also remove my settings and data\" - they're what its \"Restore registry backup\" uses. If it's removing an app right now, Setup stops and asks you to wait - it never stops Hallow Uninstall mid-removal.";
             return null;
         }
+        // v1.22: a second data folder in %LOCALAPPDATA% that follows "Also remove my settings and data" (null = none): Hallow Notes' backups
+        // of unsaved tabs, Hallow Uninstall's history, registry backups and plans
+        public static string LocalDataDir(HallowApp a)
+        {
+            return a != null && (a.Name == "Notes" || a.Name == "Uninstall") ? Path.Combine(Setup.Local, "Hallow" + a.Name) : null;
+        }
+        // v1.22: Hallow Net's 24-hour history and timeline (history.csv, timeline.csv - local only, never roams)
+        public static string NetHistoryDir() { return Path.Combine(Setup.Local, "HallowNet"); }
         // v1.13: how many of Hallow VPN's kill switch firewall rules exist (read-only: netsh lists the rules)
         public static int VpnKillSwitchRules()
         {
@@ -217,22 +235,35 @@ namespace HallowSetup
             if (!a.Installed) return new UninstallResult { Message = a.Title + " isn't installed." };
             var dir = ProgramDir(a);
             if (!string.Equals(Path.GetFileName(dir), a.Title, StringComparison.OrdinalIgnoreCase)) return new UninstallResult { Message = "Unexpected folder " + dir + " - nothing removed." };
+            if (NeverForced(a)) force = false;   // v1.22: Hallow Uninstall is never force-stopped
             // 1. close it: ask it to quit (as its tray Exit does), wait for it
             // v1.21: Hallow Files always hears "--cmd quit" first (it saves its open tabs and lets a running copy finish) - even when Setup
             // sees no copy of it running, which costs nothing: with no Hallow Files to answer, the line just goes nowhere
-            if (a.Name == "Files" && Processes(a).Length == 0) RunOwn(a, "--cmd quit", 10000);
+            // (v1.22: Hallow Net, Paint, Notes and Uninstall too - their reply is read: Hallow Uninstall says "error busy removing" while
+            // it removes an app, and then Setup stops right here, removes nothing and asks you to wait)
+            string first = null;
+            if (QuitAlways(a))
+            {
+                progress("Asking " + a.Title + " to quit...");
+                first = CmdReply(a, "quit", 10000);
+                if (IsBusyReply(first)) return BusyResult(a);
+            }
             if (Processes(a).Length > 0)
             {
                 progress(a.Name == "Display" ? "Closing Hallow Display (it puts your display settings back first)..." : "Closing " + a.Title + "...");
                 // v1.20: Hallow Find hears "--cmd quit" first (what its own Uninstall.ps1 does: it saves and lets go of its index, then
                 // exits); the pipe only if that didn't answer ok. Never in test mode: "--cmd" would reach the real app's pipe.
-                bool cmdOk = QuitByCmdFirst(a) && RunOwn(a, "--cmd quit", 10000);   // v1.21: test mode records it instead (false = the test pipe next)
+                bool cmdOk = QuitAlways(a) ? first != null && first.StartsWith("ok") : QuitByCmdFirst(a) && RunOwn(a, "--cmd quit", 10000);   // v1.21: test mode records it instead (false = the test pipe next)
                 var q = cmdOk ? "ok" : Send(a, "quit", 3000);
+                if (IsBusyReply(q)) return BusyResult(a);   // v1.22
                 // v1.19: Hallow Display must hear "quit" (it puts every display change back, then exits) - if its pipe didn't answer,
                 // the same line through its own "--cmd quit" (never in test mode: that would reach the real app's pipe)
                 if (a.Name == "Display" && !(q != null && q.StartsWith("ok")) && !Setup.TestMode) CmdQuit(a);
                 if (!WaitGone(a, QuitWaitMs(a)))
                 {
+                    // v1.22: Hallow Uninstall may be in the middle of a removal (an app's own uninstaller running, registry keys going) -
+                    // Setup never offers to force it
+                    if (NeverForced(a)) return new UninstallResult { Busy = true, Message = a.Title + " didn't close. If it's removing an app, let it finish, then close its window and click Uninstall again - Setup never stops it mid-removal. Nothing was removed." };
                     if (!force) return new UninstallResult { Message = a.Title + " didn't close.", StillRunning = true };
                     foreach (var p in Processes(a)) try { p.Kill(); } catch { }
                     if (!WaitGone(a, 5000)) return new UninstallResult { Message = "Couldn't close " + a.Title + " - close it from its tray icon and try again. Nothing was removed." };
@@ -322,6 +353,14 @@ namespace HallowSetup
                 if (left == 0) notes.Add("Its file index is removed too.");
                 else { ok = false; notes.Add("Couldn't delete " + left + (left == 1 ? " item" : " items") + " of its file index in " + FindIndexDir() + "."); }
             }
+            // v1.22: Hallow Net's history and timeline always go, for good (its own uninstaller does the same) - ping numbers, network
+            // changes and which apps used the connection are this PC's own business; its settings follow the data step below
+            if (a.Name == "Net")
+            {
+                var left = WipeNetHistory(NetHistoryDir());
+                if (left == 0) notes.Add("Its history is deleted.");
+                else { ok = false; notes.Add("Couldn't delete " + left + (left == 1 ? " item" : " items") + " of its history in " + NetHistoryDir() + "."); }
+            }
             // 5. settings and data, only when ticked, never a kept folder
             if (withData)
             {
@@ -331,15 +370,28 @@ namespace HallowSetup
                 if (a.Name == "Home") { var wv = Path.Combine(Setup.Local, "HallowHome"); if (Directory.Exists(wv) && !Recycle(wv)) { ok = false; notes.Add("Couldn't remove " + wv + "."); } }   // v1.16: the live view's WebView2 cache
                 if (a.Name == "Email") { var wv = Path.Combine(Setup.Local, "HallowEmail"); if (Directory.Exists(wv) && !Recycle(wv)) { ok = false; notes.Add("Couldn't remove " + wv + "."); } }   // v1.17: the reader's WebView2 scratch folder
                 if (a.Name == "Browser") { var prof = Path.Combine(Setup.Local, "HallowBrowser"); if (Directory.Exists(prof)) { if (Recycle(prof)) notes.Add("Browsing data (cookies, history) is in the Recycle Bin."); else { ok = false; notes.Add("Couldn't remove " + prof + "."); } } }
+                // v1.22: Hallow Notes' backups of unsaved tabs / Hallow Uninstall's history and registry backups - only now, ticked
+                var ld = LocalDataDir(a);
+                if (ld != null && why == null && Directory.Exists(ld))
+                {
+                    if (Recycle(ld)) notes.Add(a.Name == "Notes" ? "The backups of your unsaved tabs are in the Recycle Bin too." : "Its history and registry backups are in the Recycle Bin too.");
+                    else { ok = false; notes.Add("Couldn't remove " + ld + "."); }
+                }
             }
-            else if (a.Name != "Keys" && a.Name != "Financials" && Directory.Exists(DataDir(a))) notes.Add("Your settings stay in " + DataDir(a) + ".");
+            else
+            {
+                if (a.Name != "Keys" && a.Name != "Financials" && Directory.Exists(DataDir(a))) notes.Add("Your settings stay in " + DataDir(a) + ".");
+                var ld = LocalDataDir(a);   // v1.22: kept, and said so
+                if (ld != null && Directory.Exists(ld)) notes.Add(a.Name == "Notes" ? "The backups of your unsaved tabs stay in " + ld + "." : "Its history and registry backups stay in " + ld + ".");
+            }
             var kn = a.Name == "Vault" ? "Your backups are still there." : a.Name == "Clips" ? "Your clips are still there." : a.Name == "Capture" ? "Your captures are still there." : a.Name == "Keys" ? "Your password vault is still in " + DataDir(a) + "." : a.Name == "Financials" ? "Your encrypted finance vault is still in " + DataDir(a) + "." : null;
             if (kn != null) notes.Insert(0, kn);
             return new UninstallResult { Ok = ok, Message = (ok ? a.Title + " is uninstalled." : a.Title + " is partly uninstalled.") + (notes.Count > 0 ? " " + string.Join(" ", notes) : "") };
         }
         // v1.19: how long to wait after "quit" - Hallow Display puts modes, HDR, brightness and gamma back first (DDC/CI is slow)
         // (v1.21: Hallow Files 30 s too - it lets a copy or move that's running finish before it exits)
-        public static int QuitWaitMs(HallowApp a) { return a.Name == "Display" || a.Name == "Files" ? 30000 : 15000; }
+        // (v1.22: Hallow Paint 30 s too - it writes every unsaved picture to its recovery folder first, and a picture can be 8K with layers)
+        public static int QuitWaitMs(HallowApp a) { return a.Name == "Display" || a.Name == "Files" || a.Name == "Paint" ? 30000 : 15000; }
         // v1.19: "HallowDisplay.exe --cmd quit" (the same line over its pipe; waits up to 10 s for the reply)
         // (v1.20: true when it answered ok - exit code 0)
         static bool CmdQuit(HallowApp a)
@@ -347,7 +399,39 @@ namespace HallowSetup
             try { using (var p = Process.Start(new ProcessStartInfo(a.Exe, "--cmd quit") { UseShellExecute = false, CreateNoWindow = true })) return p.WaitForExit(10000) && p.ExitCode == 0; } catch { return false; }
         }
         // v1.20: apps told to quit through their own "--cmd quit" before the pipe is tried (v1.21: Hallow Files too)
-        public static bool QuitByCmdFirst(HallowApp a) { return a != null && (a.Name == "Find" || a.Name == "Files"); }
+        public static bool QuitByCmdFirst(HallowApp a) { return a != null && (a.Name == "Find" || QuitAlways(a)); }
+        // v1.22: apps that hear "<exe> --cmd quit" first even when Setup sees no copy running, with the reply read: Hallow Files (v1.21),
+        // Hallow Net (stops its helper), Hallow Paint (unsaved pictures to recovery), Hallow Notes (backs up unsaved tabs), Hallow Uninstall
+        public static bool QuitAlways(HallowApp a) { return a != null && (a.Name == "Files" || a.Name == "Net" || a.Name == "Paint" || a.Name == "Notes" || a.Name == "Uninstall"); }
+        // v1.22: never force-stopped, not even after you say yes: Hallow Uninstall (a removal must not stop halfway)
+        public static bool NeverForced(HallowApp a) { return a != null && a.Name == "Uninstall"; }
+        // v1.22: "error busy removing" - Hallow Uninstall's answer to quit while an uninstall or removal runs
+        public static bool IsBusyReply(string reply) { return reply != null && reply.Trim().StartsWith("error busy removing", StringComparison.OrdinalIgnoreCase); }
+        static UninstallResult BusyResult(HallowApp a)
+        {
+            return new UninstallResult { Busy = true, Message = a.Title + " is removing an app right now - wait until it has finished, then click Uninstall again. Setup never stops it mid-removal, so nothing was removed." };
+        }
+        // v1.22: "<exe> --cmd <line>" and the reply it prints ("ok", "error busy removing"), or null when nothing answered (exit code 2 =
+        // not running, no exe, or no answer in waitMs). In test mode the exe is never run: the line is recorded in TestLog (the same
+        // "run <exe> --cmd quit" as RunOwn) and TestCmdReply is the answer.
+        public static string TestCmdReply;
+        public static string CmdReply(HallowApp a, string line, int waitMs)
+        {
+            if (Setup.TestMode) { lock (TestLog) TestLog.Add("run " + Path.GetFileName(a.Exe) + " --cmd " + line); return TestCmdReply; }
+            try
+            {
+                if (!File.Exists(a.Exe)) return null;
+                using (var p = Process.Start(new ProcessStartInfo(a.Exe, "--cmd " + line) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, StandardOutputEncoding = Encoding.UTF8 }))
+                {
+                    var read = p.StandardOutput.ReadToEndAsync();
+                    if (!p.WaitForExit(waitMs)) return null;   // the short-lived "--cmd" client ends by itself once its own wait is over
+                    if (p.ExitCode == 2) return null;
+                    var r = read.Wait(2000) ? (read.Result ?? "").Trim() : "";
+                    return r.Length > 0 ? r.Split('\n')[0].Trim() : p.ExitCode == 0 ? "ok" : "error";
+                }
+            }
+            catch { return null; }
+        }
         // v1.21: the app's own exe with one switch (no window), true when it exits with 0 within waitMs. In test mode it is never
         // started - "HallowFiles.exe --cmd quit" would reach the real app's pipe and "--undo-default-fm" the real registry - the line
         // is only recorded in TestLog ("run HallowFiles.exe --cmd quit", in order with the recycles) and counts as not answered.
@@ -390,6 +474,14 @@ namespace HallowSetup
             if (string.IsNullOrEmpty(indexDir) || !string.Equals(Path.GetFileName(indexDir.TrimEnd('\\')), "HallowFind", StringComparison.OrdinalIgnoreCase) || !Directory.Exists(indexDir)) return 0;
             try { if ((File.GetAttributes(indexDir) & FileAttributes.ReparsePoint) != 0) return 1; } catch { return 1; }
             return WipeTree(indexDir);
+        }
+        // v1.22: Hallow Net's history folder deleted for good the same way - only a folder called HallowNet, file by file, links never
+        // followed, then the empty folders. Returns how many entries are left.
+        public static int WipeNetHistory(string historyDir)
+        {
+            if (string.IsNullOrEmpty(historyDir) || !string.Equals(Path.GetFileName(historyDir.TrimEnd('\\')), "HallowNet", StringComparison.OrdinalIgnoreCase) || !Directory.Exists(historyDir)) return 0;
+            try { if ((File.GetAttributes(historyDir) & FileAttributes.ReparsePoint) != 0) return 1; } catch { return 1; }
+            return WipeTree(historyDir);
         }
         static int WipeTree(string dir)
         {

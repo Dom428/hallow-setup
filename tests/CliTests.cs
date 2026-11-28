@@ -264,12 +264,137 @@ namespace HallowSetup.Tests
             }
         }
 
+        // v1.22: Hallow Net, Paint, Notes and Uninstall - the catalogue, their icons, Start with Windows (Net only), the uninstall
+        // order (always "<exe> --cmd quit" first), Net's history wipe, Notes' backups of unsaved text only when ticked, and Hallow
+        // Uninstall's "error busy removing" (wait - nothing removed, never forced). Test mode on temp folders only: the apps' exes are
+        // never run (Uninstaller.CmdReply records the line, TestCmdReply is the answer), recycles are only recorded, the registry keys
+        // are made-up names under HKCU that don't exist (read / delete-if-there only - nothing is written).
+        static void NewApps122(string tmp)
+        {
+            var net = Setup.Find("Net"); var paint = Setup.Find("hallow paint"); var notes = Setup.Find("HallowNotes"); var un = Setup.Find("Hallow Uninstall");
+            var four = new[] { net, paint, notes, un };
+            Ok(four.All(a => a != null) && net.Repo == "Dom428/hallow-net" && paint.Repo == "Dom428/hallow-paint" && notes.Repo == "Dom428/hallow-notes" && un.Repo == "Dom428/hallow-uninstall", "1.22: Net, Paint, Notes and Uninstall in the catalogue with their repos");
+            if (four.Any(a => a == null)) return;
+            Ok(net.Icon == "gauge-high" && paint.Icon == "tool-brush" && notes.Icon == "file-lines" && un.Icon == "broom" && four.All(a => Icons.Get(a.Icon) != null), "1.22: icons gauge-high / tool-brush / file-lines / broom, path data in Icons.g.cs");
+            var files = Setup.Find("Files"); int iF = Setup.Apps.IndexOf(files);
+            Ok(Setup.Apps.IndexOf(net) == iF + 1 && Setup.Apps.IndexOf(paint) == iF + 2 && Setup.Apps.IndexOf(notes) == iF + 3 && Setup.Apps.IndexOf(un) == iF + 4 && Setup.Apps.IndexOf(un) < Setup.Apps.IndexOf(Setup.Find("Toolkit")) && four.All(a => !a.IsToolkit), "1.22: after Files, before Toolkit");
+            Ok(net.Desc.Contains("ping") && net.Desc.Contains("no admin") && paint.Desc.Contains("layers") && notes.Desc.Contains("find in files") && un.Desc.Contains("leftovers"), "1.22: descriptions");
+            // the catalogue icons: 64 x 64 PNGs, the 64 px frame of each app's own hallow.ico (compared when the sibling repo is on this PC)
+            foreach (var a in four)
+            {
+                var n = a.Name.ToLowerInvariant();
+                var pf = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\src\icons\" + n + ".png")); byte[] png = File.Exists(pf) ? File.ReadAllBytes(pf) : null;
+                Ok(png != null && png.Length > 24 && png[0] == 0x89 && png[1] == (byte)'P' && (png[16] << 24 | png[17] << 16 | png[18] << 8 | png[19]) == 64 && (png[20] << 24 | png[21] << 16 | png[22] << 8 | png[23]) == 64, "1.22: src\\icons\\" + n + ".png is there (64 x 64 PNG like the others)");
+                var ico = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\..\Hallow" + a.Name + @"\src\hallow.ico"));
+                if (File.Exists(ico) && png != null) Ok(IcoFrame(File.ReadAllBytes(ico), 64) != null && IcoFrame(File.ReadAllBytes(ico), 64).SequenceEqual(png), "1.22: " + n + ".png is the 64 px frame of Hallow " + a.Name + "'s own hallow.ico");
+            }
+            // Start with Windows: Net starts in the tray (--tray, Setup's switch), the three windowed ones have none
+            Ok(!net.NoTray && paint.NoTray && notes.NoTray && un.NoTray && files.NoTray && Setup.Find("Browser").NoTray && !Setup.Find("Find").NoTray, "1.22: Start with Windows - Net yes (--tray); Paint, Notes, Uninstall no (NoTray, like Files / Browser)");
+            Ok(four.All(a => Uninstaller.QuitByCmdFirst(a) && Uninstaller.QuitAlways(a)) && Uninstaller.QuitAlways(files) && !Uninstaller.QuitAlways(Setup.Find("Find")) && !Uninstaller.QuitAlways(Setup.Find("Hub")) && !Uninstaller.QuitAlways(null), "1.22: all four hear \"--cmd quit\" first, always (Files too; not Find, not Hub)");
+            Ok(Uninstaller.QuitWaitMs(paint) == 30000 && Uninstaller.QuitWaitMs(net) == 15000 && Uninstaller.QuitWaitMs(notes) == 15000 && Uninstaller.QuitWaitMs(un) == 15000, "1.22: Paint gets 30 s to write its recovery pictures, the others 15 s");
+            Ok(Uninstaller.NeverForced(un) && !Uninstaller.NeverForced(paint) && !Uninstaller.NeverForced(notes) && !Uninstaller.NeverForced(net) && !Uninstaller.NeverForced(null), "1.22: only Hallow Uninstall is never force-stopped");
+            Ok(Uninstaller.IsBusyReply("error busy removing") && Uninstaller.IsBusyReply(" error busy removing\r") && !Uninstaller.IsBusyReply("error busy") && !Uninstaller.IsBusyReply("ok") && !Uninstaller.IsBusyReply(null), "1.22: only \"error busy removing\" means wait (a plain \"error busy\" is a slow window, not a removal)");
+
+            var names = new[] { "HALLOW_SETUP_API", "HALLOW_SETUP_LOCAL", "HALLOW_SETUP_RUNKEY", "HALLOW_SETUP_APPDATA", "HALLOW_SETUP_PROGRAMS", "HALLOW_SETUP_DESKTOP", "HALLOW_SETUP_PROGRAMDATA", "HALLOW_SETUP_REGROOT", "HALLOW_SETUP_PIPE" };
+            var keep = names.ToDictionary(n => n, n => Environment.GetEnvironmentVariable(n));
+            var root = Path.Combine(tmp, "apps122"); var lo = Path.Combine(root, "local"); var ad = Path.Combine(root, "appdata"); var sm = Path.Combine(root, "startmenu"); var dt = Path.Combine(root, "desktop"); var pd = Path.Combine(root, "programdata");
+            var fake = "HallowSetupTest-" + Guid.NewGuid().ToString("N");   // never created: every registry step finds nothing there
+            try
+            {
+                foreach (var d in new[] { lo, ad, sm, dt, pd }) Directory.CreateDirectory(d);
+                var vals = new Dictionary<string, string> { { "HALLOW_SETUP_API", "http://127.0.0.1:9/unused" }, { "HALLOW_SETUP_LOCAL", lo }, { "HALLOW_SETUP_RUNKEY", @"Software\" + fake + @"\Run" }, { "HALLOW_SETUP_APPDATA", ad },
+                    { "HALLOW_SETUP_PROGRAMS", sm }, { "HALLOW_SETUP_DESKTOP", dt }, { "HALLOW_SETUP_PROGRAMDATA", pd }, { "HALLOW_SETUP_REGROOT", @"Software\" + fake }, { "HALLOW_SETUP_PIPE", fake } };
+                foreach (var kv in vals) Environment.SetEnvironmentVariable(kv.Key, kv.Value);
+                Ok(Setup.TestMode && Uninstaller.TestGuard() == null, "1.22: test mode with every place pointing at temp folders / made-up keys");
+                Ok(four.All(a => !a.StartsWithWindows), "1.22: no Start with Windows value read for any of them (the made-up key)");
+                Ok(Uninstaller.NetHistoryDir() == Path.Combine(lo, "HallowNet") && Uninstaller.LocalDataDir(notes) == Path.Combine(lo, "HallowNotes") && Uninstaller.LocalDataDir(un) == Path.Combine(lo, "HallowUninstall")
+                    && Uninstaller.LocalDataDir(net) == null && Uninstaller.LocalDataDir(paint) == null && four.All(a => Uninstaller.DataDir(a) == Path.Combine(ad, "Hallow" + a.Name)), "1.22: data folders - %APPDATA%\\Hallow<App>; Net's history, Notes' backups and Uninstall's backups in %LOCALAPPDATA%");
+                // the dialog's words
+                var nn = Uninstaller.KeptNote(net); var pn = Uninstaller.KeptNote(paint); var on = Uninstaller.KeptNote(notes); var un2 = Uninstaller.KeptNote(un);
+                Ok(nn != null && nn.Contains("quit first") && nn.Contains("never starts or approves the helper") && nn.Contains("deleted for good") && nn.Contains(Uninstaller.NetHistoryDir()), "1.22: Net's note - quit first, helper never started, history deleted for good");
+                Ok(pn != null && pn.Contains("quit first") && pn.Contains("recovery") && pn.Contains("Also remove my settings and data"), "1.22: Paint's note - quit first, unsaved pictures kept in recovery, they follow the data choice");
+                Ok(on != null && on.Contains("ONLY if you tick") && on.Contains("Also remove my settings and data") && on.Contains(Path.Combine(lo, "HallowNotes", "backup")) && UninstallDialog.DataText(notes).Contains(Path.Combine(lo, "HallowNotes")) && UninstallDialog.DataText(notes).Contains("unsaved text"), "1.22: Notes' dialog says its unsaved-text backups go only when ticked (note and the tick box's line)");
+                Ok(un2 != null && un2.Contains("registry backups") && un2.Contains("stay unless you tick") && un2.Contains("never stops") && UninstallDialog.DataText(un).Contains(Path.Combine(lo, "HallowUninstall")) && UninstallDialog.DataText(un).Contains("registry backups") && UninstallDialog.DataText(paint) == Uninstaller.DataDir(paint), "1.22: Uninstall's dialog says its registry backups stay unless ticked, and that Setup never stops it mid-removal");
+
+                Func<HallowApp, bool, bool, UninstallResult> run = (a, withData, force) =>
+                {
+                    var prog = Path.Combine(lo, "Programs", a.Title); Directory.CreateDirectory(prog); File.WriteAllText(Path.Combine(prog, "Hallow" + a.Name + ".exe"), "not a real exe");
+                    var data = Uninstaller.DataDir(a); Directory.CreateDirectory(data); File.WriteAllText(Path.Combine(data, "settings.json"), "{}");
+                    File.WriteAllText(Path.Combine(sm, a.Title + ".lnk"), "x"); File.WriteAllText(Path.Combine(dt, a.Title + ".lnk"), "x");
+                    lock (Uninstaller.TestLog) Uninstaller.TestLog.Clear();
+                    Uninstaller.RecordRecycle = true;
+                    try { return Uninstaller.Uninstall(a, withData, force, p => { }); } finally { Uninstaller.RecordRecycle = false; }
+                };
+                Func<string> logText = () => string.Join(" | ", Uninstaller.TestLog.Select(l => l.Replace(root, "<tmp>")));
+                // the order for each: "<exe> --cmd quit" first, then the shortcuts and the program folder; settings kept when not ticked
+                foreach (var a in four)
+                {
+                    Uninstaller.TestCmdReply = "ok";
+                    var r = run(a, false, false); var log = Uninstaller.TestLog.ToList(); var prog = Path.Combine(lo, "Programs", a.Title);
+                    int iQuit = log.IndexOf("run Hallow" + a.Name + ".exe --cmd quit"), iProg = log.IndexOf("recycle " + prog), iLnk = log.IndexOf("recycle " + Path.Combine(sm, a.Title + ".lnk"));
+                    Ok(iQuit == 0 && iLnk > iQuit && iProg > iQuit && log.Count(l => l.StartsWith("run ")) == 1 && r.Ok && !r.Busy && !r.StillRunning, "1.22: " + a.Name + " - --cmd quit first, then shortcuts and program folder (" + logText() + ")");
+                    Ok(!log.Contains("recycle " + Uninstaller.DataDir(a)) && r.Message.Contains("Your settings stay in " + Uninstaller.DataDir(a)), "1.22: " + a.Name + " - settings kept when not ticked (" + r.Message.Replace(root, "<tmp>") + ")");
+                    r = run(a, true, false); log = Uninstaller.TestLog.ToList();
+                    Ok(log.IndexOf("recycle " + Uninstaller.DataDir(a)) > log.IndexOf("recycle " + prog) && r.Message.Contains("Settings and data are in the Recycle Bin"), "1.22: " + a.Name + " - ticked: settings to the Recycle Bin after the program folder");
+                }
+                Uninstaller.TestCmdReply = null;
+                // Net: its history always goes, for good - file by file, only the HallowNet folder; Setup never starts its helper
+                var hist = Uninstaller.NetHistoryDir(); Directory.CreateDirectory(hist);
+                foreach (var f in new[] { "history.csv", "history.csv.tmp", "timeline.csv" }) File.WriteAllText(Path.Combine(hist, f), "t,ping\n1,34\n");
+                var rn = run(net, false, false); var ln = Uninstaller.TestLog.ToList();
+                Ok(!Directory.Exists(hist) && rn.Message.Contains("Its history is deleted") && !ln.Contains("recycle " + hist) && Directory.Exists(Uninstaller.DataDir(net)), "1.22: Net - history deleted for good (not the Recycle Bin) with the settings kept (" + rn.Message.Replace(root, "<tmp>") + ")");
+                Ok(!ln.Any(l => l.Contains("--helper") || l.Contains("runas")), "1.22: Net - Setup never starts its helper (" + logText() + ")");
+                var notNet = Path.Combine(lo, "NotHallowNet"); Directory.CreateDirectory(notNet); File.WriteAllText(Path.Combine(notNet, "history.csv"), "x");
+                Ok(Uninstaller.WipeNetHistory(notNet) == 0 && File.Exists(Path.Combine(notNet, "history.csv")) && Uninstaller.WipeNetHistory(null) == 0, "1.22: the history wipe only ever runs in a HallowNet folder");
+                // Notes: the backups of unsaved text stay unless ticked
+                var nb = Path.Combine(Uninstaller.LocalDataDir(notes), "backup"); Directory.CreateDirectory(nb); File.WriteAllText(Path.Combine(nb, "tab-1.txt"), "unsaved text");
+                var ro = run(notes, false, false); var lno = Uninstaller.TestLog.ToList();
+                Ok(lno[0] == "run HallowNotes.exe --cmd quit" && !lno.Any(l => l.StartsWith("recycle " + Uninstaller.LocalDataDir(notes))) && File.Exists(Path.Combine(nb, "tab-1.txt")) && ro.Message.Contains("backups of your unsaved tabs stay in " + Uninstaller.LocalDataDir(notes)), "1.22: Notes not ticked - its unsaved-text backups stay, and the result says where (" + ro.Message.Replace(root, "<tmp>") + ")");
+                ro = run(notes, true, false); lno = Uninstaller.TestLog.ToList();
+                Ok(lno.IndexOf("recycle " + Uninstaller.LocalDataDir(notes)) > lno.IndexOf("recycle " + Path.Combine(lo, "Programs", notes.Title)) && ro.Message.Contains("backups of your unsaved tabs are in the Recycle Bin"), "1.22: Notes ticked - the backups go to the Recycle Bin, after quit and the program folder (" + logText() + ")");
+                // Hallow Uninstall busy removing: nothing removed, never forced - not even with force
+                var ub = Path.Combine(Uninstaller.LocalDataDir(un), "backups", "removal-1"); Directory.CreateDirectory(ub); File.WriteAllText(Path.Combine(ub, "keys.reg"), "Windows Registry Editor Version 5.00");
+                Uninstaller.TestCmdReply = "error busy removing";
+                foreach (var force in new[] { false, true })
+                {
+                    var rb = run(un, true, force); var lb = Uninstaller.TestLog.ToList();
+                    Ok(rb.Busy && !rb.Ok && !rb.StillRunning && rb.Message.Contains("wait") && rb.Message.Contains("never stops it") && lb.Count == 1 && lb[0] == "run HallowUninstall.exe --cmd quit"
+                        && File.Exists(Path.Combine(lo, "Programs", un.Title, "HallowUninstall.exe")) && File.Exists(Path.Combine(ub, "keys.reg")), "1.22: Uninstall busy removing" + (force ? " (even with force)" : "") + " - stops after quit, removes nothing, says wait (" + rb.Message + ")");
+                }
+                Uninstaller.TestCmdReply = null;
+                var ru = run(un, false, false); var lu = Uninstaller.TestLog.ToList();
+                Ok(ru.Ok && !lu.Any(l => l.StartsWith("recycle " + Uninstaller.LocalDataDir(un))) && File.Exists(Path.Combine(ub, "keys.reg")) && ru.Message.Contains("history and registry backups stay in " + Uninstaller.LocalDataDir(un)), "1.22: Uninstall not ticked - its registry backups stay, and the result says so (" + ru.Message.Replace(root, "<tmp>") + ")");
+                ru = run(un, true, false); lu = Uninstaller.TestLog.ToList();
+                Ok(lu.Contains("recycle " + Uninstaller.LocalDataDir(un)) && ru.Message.Contains("registry backups are in the Recycle Bin"), "1.22: Uninstall ticked - history and registry backups to the Recycle Bin");
+                Ok(Directory.Exists(Path.Combine(lo, "Programs", un.Title)) && File.Exists(Path.Combine(ub, "keys.reg")), "1.22: test mode deleted nothing it only recorded (program folder and backups still on disk)");
+            }
+            finally
+            {
+                Uninstaller.RecordRecycle = false; Uninstaller.TestCmdReply = null;
+                foreach (var kv in keep) Environment.SetEnvironmentVariable(kv.Key, kv.Value);
+            }
+        }
+        // the PNG frame of an .ico with this width (null if there's none)
+        static byte[] IcoFrame(byte[] ico, int size)
+        {
+            if (ico == null || ico.Length < 6) return null;
+            int n = BitConverter.ToUInt16(ico, 4);
+            for (int i = 0; i < n && 6 + 16 * i + 16 <= ico.Length; i++)
+            {
+                int e = 6 + 16 * i, w = ico[e] == 0 ? 256 : ico[e], len = BitConverter.ToInt32(ico, e + 8), off = BitConverter.ToInt32(ico, e + 12);
+                if (w != size || off < 0 || len <= 0 || off + len > ico.Length) continue;
+                var f = new byte[len]; Array.Copy(ico, off, f, 0, len); return f;
+            }
+            return null;
+        }
+
         static void CliTests(string tmp)        {
             // ---- the catalogue: every current family app or part
             NewApps119(tmp);
             NewApps120(tmp);
             NewApps121(tmp);
-            foreach (var n in new[] { "Hub", "Toolkit", "Mixer", "Overlay", "Remote", "Vault", "Clips", "Keys", "Assist", "Guard", "Tasks", "Browser", "VPN", "Torrents", "Financials", "Email", "Home", "Gear", "Capture", "Display", "Find", "Files" })
+            NewApps122(tmp);
+            foreach (var n in new[] { "Hub", "Toolkit", "Mixer", "Overlay", "Remote", "Vault", "Clips", "Keys", "Assist", "Guard", "Tasks", "Browser", "VPN", "Torrents", "Financials", "Email", "Home", "Gear", "Capture", "Display", "Find", "Files", "Net", "Paint", "Notes", "Uninstall" })
                 Ok(Setup.Find(n) != null && Setup.Find(n).Repo == "Dom428/hallow-" + n.ToLowerInvariant(), "catalogue: Hallow " + n);
             Ok(Shield.Repo == "Dom428/hallow-shield", "catalogue: Hallow Shield (browser extension)");
             Ok(Setup.FindOther("Places") != null && Setup.FindOther("Places").Kind == "server" && Setup.FindOther("Authenticator") != null && Setup.FindOther("Authenticator").Kind == "phone", "catalogue: Places (NAS) and Authenticator (phone) listed, not installable");
