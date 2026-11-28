@@ -92,6 +92,12 @@ namespace HallowSetup
                     if (File.Exists(f)) dir = Setting(f, "Folder");
                     res.Add(!string.IsNullOrEmpty(dir) ? dir : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "Hallow Clips"));
                 }
+                else if (a.Name == "Capture")   // v1.19: the captures folder (its SaveRoot, else %USERPROFILE%\Hallow Captures)
+                {
+                    var f = Path.Combine(DataDir(a), "settings.json"); string dir = null;
+                    if (File.Exists(f)) dir = Setting(f, "SaveRoot");
+                    res.Add(!string.IsNullOrEmpty(dir) ? dir : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Hallow Captures"));
+                }
                 else if (a.Name == "Keys" || a.Name == "Financials") res.Add(DataDir(a));   // the password vault / the finance vault: Setup never removes them
             }
             catch { return null; }
@@ -118,10 +124,12 @@ namespace HallowSetup
             if (a.IsToolkit) return "Hallow Toolkit keeps its settings in its own folder.";
             if (a.Name == "Keys") return "Your password vault stays in " + DataDir(a) + " - Hallow Setup never removes it.";
             if (a.Name == "Financials") return "Your encrypted finance vault and its backups stay in " + DataDir(a) + " - Hallow Setup never removes them.";
+            // v1.19: a display change Hallow Display couldn't put back yet - its restore.json lets a reinstall put it back, so the folder stays
+            if (a.Name == "Display" && File.Exists(Path.Combine(DataDir(a), "restore.json"))) return "Hallow Display still has a display change to put back (restore.json), so its folder stays - reinstalling it puts the change back.";
             var kept = KeptFolders(a);
             if (kept == null) return "Couldn't read " + a.Title + "'s settings, so its data stays.";
             var d = DataDir(a);
-            foreach (var k in kept) if (Inside(k, d)) return "Your " + (a.Name == "Vault" ? "backups are" : "clips are") + " inside " + d + ", so it stays.";
+            foreach (var k in kept) if (Inside(k, d)) return "Your " + (a.Name == "Vault" ? "backups are" : a.Name == "Capture" ? "captures are" : "clips are") + " inside " + d + ", so it stays.";
             return null;
         }
         // one line for the dialog about what is never touched (or null)
@@ -138,6 +146,8 @@ namespace HallowSetup
             if (a.Name == "Home") return "Home Assistant on your NAS isn't touched (revoke Hallow Home's token there if you like). Snapshots in Pictures\\Hallow Home stay.";
             if (a.Name == "Email") return "Your mail stays on your providers' servers. Ticking \"Also remove my settings and data\" removes only the encrypted cache and saved sign-ins on this PC (to the Recycle Bin).";
             if (a.Name == "Torrents") return "Your downloaded files are never touched. Its .torrent / magnet link handler is removed where it points at Hallow Torrents.";
+            if (a.Name == "Capture") return "Your clipboard history is deleted (for good - it's encrypted for you and nobody should find it later). Your Hallow Captures folder stays" + (kept != null && kept.Count > 0 ? " (" + kept[0] + ")." : ".");
+            if (a.Name == "Display") return "Any display change it made (a game profile's resolution, refresh rate, HDR or brightness, night mode) is put back first: Setup asks it to quit before anything is removed.";
             return null;
         }
         // v1.13: how many of Hallow VPN's kill switch firewall rules exist (read-only: netsh lists the rules)
@@ -205,9 +215,12 @@ namespace HallowSetup
             // 1. close it: ask it to quit (as its tray Exit does), wait for it
             if (Processes(a).Length > 0)
             {
-                progress("Closing " + a.Title + "...");
-                Send(a, "quit", 3000);
-                if (!WaitGone(a, 15000))
+                progress(a.Name == "Display" ? "Closing Hallow Display (it puts your display settings back first)..." : "Closing " + a.Title + "...");
+                var q = Send(a, "quit", 3000);
+                // v1.19: Hallow Display must hear "quit" (it puts every display change back, then exits) - if its pipe didn't answer,
+                // the same line through its own "--cmd quit" (never in test mode: that would reach the real app's pipe)
+                if (a.Name == "Display" && !(q != null && q.StartsWith("ok")) && !Setup.TestMode) CmdQuit(a);
+                if (!WaitGone(a, QuitWaitMs(a)))
                 {
                     if (!force) return new UninstallResult { Message = a.Title + " didn't close.", StillRunning = true };
                     foreach (var p in Processes(a)) try { p.Kill(); } catch { }
@@ -270,6 +283,14 @@ namespace HallowSetup
             // 4. shortcuts and the program folder (to the Recycle Bin)
             foreach (var s in Shortcuts(a)) if (!Recycle(s)) { ok = false; notes.Add("Couldn't remove " + s + "."); }
             if (!Recycle(dir)) { ok = false; notes.Add("Couldn't remove " + dir + " (is a file in it open?)."); }
+            // v1.19: Hallow Capture's clipboard history always goes, for good (what its own uninstaller does) - before the data step,
+            // so it never lands in the Recycle Bin. Its captures folder is never touched.
+            if (a.Name == "Capture")
+            {
+                var left = WipeCaptureHistory(DataDir(a));
+                if (left == 0) notes.Add("Your clipboard history is deleted.");
+                else { ok = false; notes.Add("Couldn't delete " + left + (left == 1 ? " file" : " files") + " of your clipboard history in " + Path.Combine(DataDir(a), "history") + "."); }
+            }
             // 5. settings and data, only when ticked, never a kept folder
             if (withData)
             {
@@ -281,9 +302,32 @@ namespace HallowSetup
                 if (a.Name == "Browser") { var prof = Path.Combine(Setup.Local, "HallowBrowser"); if (Directory.Exists(prof)) { if (Recycle(prof)) notes.Add("Browsing data (cookies, history) is in the Recycle Bin."); else { ok = false; notes.Add("Couldn't remove " + prof + "."); } } }
             }
             else if (a.Name != "Keys" && a.Name != "Financials" && Directory.Exists(DataDir(a))) notes.Add("Your settings stay in " + DataDir(a) + ".");
-            var kn = a.Name == "Vault" ? "Your backups are still there." : a.Name == "Clips" ? "Your clips are still there." : a.Name == "Keys" ? "Your password vault is still in " + DataDir(a) + "." : a.Name == "Financials" ? "Your encrypted finance vault is still in " + DataDir(a) + "." : null;
+            var kn = a.Name == "Vault" ? "Your backups are still there." : a.Name == "Clips" ? "Your clips are still there." : a.Name == "Capture" ? "Your captures are still there." : a.Name == "Keys" ? "Your password vault is still in " + DataDir(a) + "." : a.Name == "Financials" ? "Your encrypted finance vault is still in " + DataDir(a) + "." : null;
             if (kn != null) notes.Insert(0, kn);
             return new UninstallResult { Ok = ok, Message = (ok ? a.Title + " is uninstalled." : a.Title + " is partly uninstalled.") + (notes.Count > 0 ? " " + string.Join(" ", notes) : "") };
+        }
+        // v1.19: how long to wait after "quit" - Hallow Display puts modes, HDR, brightness and gamma back first (DDC/CI is slow)
+        public static int QuitWaitMs(HallowApp a) { return a.Name == "Display" ? 30000 : 15000; }
+        // v1.19: "HallowDisplay.exe --cmd quit" (the same line over its pipe; waits up to 10 s for the reply)
+        static void CmdQuit(HallowApp a)
+        {
+            try { using (var p = Process.Start(new ProcessStartInfo(a.Exe, "--cmd quit") { UseShellExecute = false, CreateNoWindow = true })) p.WaitForExit(10000); } catch { }
+        }
+        // v1.19: Hallow Capture's encrypted clipboard history (<data>\history: index.bin, img-<id>.bin and their .tmp files) deleted
+        // for good, then the empty folder. Only that one folder, only those files, nothing else under it. Returns how many are left.
+        public static int WipeCaptureHistory(string dataDir)
+        {
+            if (string.IsNullOrEmpty(dataDir) || !string.Equals(Path.GetFileName(dataDir.TrimEnd('\\')), "HallowCapture", StringComparison.OrdinalIgnoreCase)) return 0;
+            var h = Path.Combine(dataDir, "history"); if (!Directory.Exists(h)) return 0;
+            int left = 0;
+            foreach (var f in Directory.GetFiles(h))
+            {
+                var n = Path.GetFileName(f).ToLowerInvariant();
+                if (!(n.StartsWith("index.bin") || (n.StartsWith("img-") && n.EndsWith(".bin")) || n.EndsWith(".tmp"))) { left++; continue; }
+                try { File.SetAttributes(f, FileAttributes.Normal); File.Delete(f); } catch { left++; }
+            }
+            try { if (Directory.GetFileSystemEntries(h).Length == 0) Directory.Delete(h); } catch { }
+            return left;
         }
         static bool WaitGone(HallowApp a, int ms)
         {

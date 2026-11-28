@@ -1,5 +1,5 @@
 ﻿// Hallow Setup - one window to install, update and start-with-Windows the Hallow family:
-// Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser, VPN, Torrents, Financials, Home, Email, Gear and Toolkit. Nothing is downloaded until you click Install or Update.
+// Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser, VPN, Torrents, Financials, Home, Email, Gear, Capture, Display and Toolkit. Nothing is downloaded until you click Install or Update.
 // v1.3: Uninstall per app (Uninstall.cs, UninstallDialog.cs).
 // v1.4: Hallow Assist in the list.
 // v1.5: Hallow Guard in the list.
@@ -17,6 +17,8 @@
 // v1.17: Hallow Email in the list; uninstalling it never touches mail on the servers (and moves its WebView2 scratch folder to the Recycle Bin with the data).
 // v1.18: --install / --update <App> and --list for Hub and Remote (Cli.cs); Hallow Gear in the list, Places and Authenticator shown (not Windows apps);
 //       downloads only from the family's own GitHub release addresses; the window can be resized / maximised.
+// v1.19: Hallow Capture and Hallow Display in the list; uninstalling Capture deletes its clipboard history for good (its captures folder
+//       stays), and Display is asked to quit (pipe, else "--cmd quit") and given 30 s to put every display change back first.
 using System;
 using System.Linq;
 using System.Reflection;
@@ -32,14 +34,14 @@ using System.Windows.Media.Imaging;
 [assembly: AssemblyTitle("Hallow Setup")]
 [assembly: AssemblyProduct("Hallow Setup")]
 [assembly: AssemblyDescription("Install and update the Hallow apps")]
-[assembly: AssemblyVersion("1.18.0.0")]
-[assembly: AssemblyFileVersion("1.18.0.0")]
+[assembly: AssemblyVersion("1.19.0.0")]
+[assembly: AssemblyFileVersion("1.19.0.0")]
 
 namespace HallowSetup
 {
     public static class Program
     {
-        public const string Version = "1.18";
+        public const string Version = "1.19";
         public static string AccentHex = "#F07820";
         static string ThemeXaml;
         // v1.10: Theme.xaml in light or dark with the Hallow accent picked in Hallow Toolkit (if any)

@@ -94,6 +94,8 @@ namespace HallowSetup
             new HallowApp { Name = "Home",    Icon = "house",         Desc = "Your pets' feeder and fountain, cameras and lock through your own Home Assistant: smarter alerts, Feed now with a confirm" },
             new HallowApp { Name = "Email",   Icon = "envelope",      Desc = "A private email client: one inbox for all your accounts, trackers and phishing blocked, a private spam filter" },
             new HallowApp { Name = "Gear",    Icon = "battery-three-quarters", Desc = "Battery, charging and wired / wireless for your Logitech gear and Bluetooth devices - read-only" },
+            new HallowApp { Name = "Capture", Icon = "camera",        Desc = "Screenshots with an editor, OCR and a private, encrypted clipboard history (never synced)" },   // v1.19
+            new HallowApp { Name = "Display", Icon = "display",       Desc = "Brightness for every monitor, per-game resolution / refresh / HDR, window layouts per monitor setup, night mode" },   // v1.19
             new HallowApp { Name = "Toolkit", Icon = "bolt",          Desc = "One-click PC tune-up, monitoring, gaming and clean-up tools (installs as admin)" },
         };
 

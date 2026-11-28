@@ -100,10 +100,61 @@ namespace HallowSetup.Tests
             }
         }
 
+        // v1.19: Hallow Capture and Hallow Display - in the list with their icons, the uninstall notes, Capture's history wipe
+        // (a temp folder only) and Display's restore.json guard. HALLOW_SETUP_APPDATA points at the temp folder while these run.
+        static void NewApps119(string tmp)
+        {
+            var cap = Setup.Find("Capture"); var dis = Setup.Find("hallow display");
+            Ok(cap != null && cap.Repo == "Dom428/hallow-capture" && cap.Icon == "camera" && Icons.Get("camera") != null && dis != null && dis.Repo == "Dom428/hallow-display" && dis.Icon == "display" && Icons.Get("display") != null, "1.19: Capture (camera) and Display (display) in the catalogue");
+            Ok(Setup.Apps.IndexOf(cap) < Setup.Apps.IndexOf(Setup.Find("Toolkit")) && Setup.Apps.IndexOf(dis) < Setup.Apps.IndexOf(Setup.Find("Toolkit")) && !cap.NoTray && !dis.NoTray, "1.19: both before Toolkit, both start in the tray");
+            foreach (var n in new[] { "capture", "display" })
+            {
+                var pf = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\src\icons\" + n + ".png")); var s = File.Exists(pf) ? File.OpenRead(pf) : null;   // build.ps1 builds every src\icons\*.png into HallowSetup.exe
+                bool ok = false; if (s != null) using (s) { var b = new byte[24]; s.Read(b, 0, 24); ok = b[0] == 0x89 && b[1] == (byte)'P' && (b[16] << 24 | b[17] << 16 | b[18] << 8 | b[19]) == 64 && (b[20] << 24 | b[21] << 16 | b[22] << 8 | b[23]) == 64; }
+                Ok(ok, "1.19: src\\icons\\" + n + ".png is there (64 x 64 PNG like the others)");
+            }
+            var keep = Environment.GetEnvironmentVariable("HALLOW_SETUP_APPDATA");
+            var ad = Path.Combine(tmp, "appdata119"); Directory.CreateDirectory(ad);
+            try
+            {
+                Environment.SetEnvironmentVariable("HALLOW_SETUP_APPDATA", ad);
+                Ok(Uninstaller.DataDir(cap) == Path.Combine(ad, "HallowCapture") && Uninstaller.DataDir(dis) == Path.Combine(ad, "HallowDisplay"), "1.19: data folders %APPDATA%\\HallowCapture / HallowDisplay");
+                var capNote = Uninstaller.KeptNote(cap);
+                Ok(capNote != null && capNote.Contains("clipboard history is deleted") && capNote.Contains("Hallow Captures"), "1.19: Capture's note - history deleted, captures folder stays");
+                Directory.CreateDirectory(Uninstaller.DataDir(cap));
+                File.WriteAllText(Path.Combine(Uninstaller.DataDir(cap), "settings.json"), "{\"SaveRoot\":\"D:\\\\Shots\",\"Format\":\"png\"}");
+                var kept = Uninstaller.KeptFolders(cap);
+                Ok(kept != null && kept.Count == 1 && kept[0] == @"D:\Shots" && Uninstaller.KeptNote(cap).Contains(@"D:\Shots"), "1.19: Capture's own save folder is the kept folder");
+                File.WriteAllText(Path.Combine(Uninstaller.DataDir(cap), "settings.json"), "{\"SaveRoot\":" + new JavaScriptSerializer().Serialize(Path.Combine(Uninstaller.DataDir(cap), "shots")) + "}");
+                Ok(Uninstaller.DataBlocked(cap) != null && Uninstaller.DataBlocked(cap).Contains("captures are inside"), "1.19: captures saved inside the data folder keep it");
+                File.Delete(Path.Combine(Uninstaller.DataDir(cap), "settings.json"));
+                Ok(Uninstaller.DataBlocked(cap) == null, "1.19: otherwise Capture's settings can go");
+                // the history wipe: only history\ index.bin / img-*.bin / *.tmp, for good; anything else is left and counted
+                var h = Path.Combine(Uninstaller.DataDir(cap), "history"); Directory.CreateDirectory(h);
+                foreach (var f in new[] { "index.bin", "index.bin.tmp", "img-a1.bin", "img-b2.bin" }) File.WriteAllBytes(Path.Combine(h, f), new byte[] { 1, 2, 3 });
+                File.WriteAllText(Path.Combine(Uninstaller.DataDir(cap), "settings.json"), "{}");
+                Ok(Uninstaller.WipeCaptureHistory(Uninstaller.DataDir(cap)) == 0 && !Directory.Exists(h) && File.Exists(Path.Combine(Uninstaller.DataDir(cap), "settings.json")), "1.19: Capture's history wiped, the folder gone, settings untouched");
+                Directory.CreateDirectory(h); File.WriteAllBytes(Path.Combine(h, "index.bin"), new byte[] { 1 }); File.WriteAllText(Path.Combine(h, "notes.txt"), "mine");
+                Ok(Uninstaller.WipeCaptureHistory(Uninstaller.DataDir(cap)) == 1 && File.Exists(Path.Combine(h, "notes.txt")) && !File.Exists(Path.Combine(h, "index.bin")), "1.19: an unknown file in history\\ is left and counted");
+                var other = Path.Combine(ad, "NotCapture"); Directory.CreateDirectory(Path.Combine(other, "history")); File.WriteAllBytes(Path.Combine(other, "history", "index.bin"), new byte[] { 1 });
+                Ok(Uninstaller.WipeCaptureHistory(other) == 0 && File.Exists(Path.Combine(other, "history", "index.bin")) && Uninstaller.WipeCaptureHistory(null) == 0, "1.19: the wipe only ever runs in a HallowCapture folder");
+                // Display: put back first, its folder kept while restore.json says a change is still out
+                var disNote = Uninstaller.KeptNote(dis);
+                Ok(disNote != null && disNote.Contains("put back first") && disNote.Contains("quit"), "1.19: Display's note - display changes put back first");
+                Ok(Uninstaller.QuitWaitMs(dis) >= 30000 && Uninstaller.QuitWaitMs(cap) == 15000, "1.19: Display gets 30 s to put things back after quit");
+                Directory.CreateDirectory(Uninstaller.DataDir(dis));
+                Ok(Uninstaller.DataBlocked(dis) == null, "1.19: Display's settings can go when nothing is waiting");
+                File.WriteAllText(Path.Combine(Uninstaller.DataDir(dis), "restore.json"), "{}");
+                Ok(Uninstaller.DataBlocked(dis) != null && Uninstaller.DataBlocked(dis).Contains("restore.json"), "1.19: Display's folder stays while restore.json is there");
+            }
+            finally { Environment.SetEnvironmentVariable("HALLOW_SETUP_APPDATA", keep); }
+        }
+
         static void CliTests(string tmp)
         {
             // ---- the catalogue: every current family app or part
-            foreach (var n in new[] { "Hub", "Toolkit", "Mixer", "Overlay", "Remote", "Vault", "Clips", "Keys", "Assist", "Guard", "Tasks", "Browser", "VPN", "Torrents", "Financials", "Email", "Home", "Gear" })
+            NewApps119(tmp);
+            foreach (var n in new[] { "Hub", "Toolkit", "Mixer", "Overlay", "Remote", "Vault", "Clips", "Keys", "Assist", "Guard", "Tasks", "Browser", "VPN", "Torrents", "Financials", "Email", "Home", "Gear", "Capture", "Display" })
                 Ok(Setup.Find(n) != null && Setup.Find(n).Repo == "Dom428/hallow-" + n.ToLowerInvariant(), "catalogue: Hallow " + n);
             Ok(Shield.Repo == "Dom428/hallow-shield", "catalogue: Hallow Shield (browser extension)");
             Ok(Setup.FindOther("Places") != null && Setup.FindOther("Places").Kind == "server" && Setup.FindOther("Authenticator") != null && Setup.FindOther("Authenticator").Kind == "phone", "catalogue: Places (NAS) and Authenticator (phone) listed, not installable");
@@ -126,7 +177,7 @@ namespace HallowSetup.Tests
             using (var gh = new FakeGitHub())
             {
                 var env = new Dictionary<string, string> { { "HALLOW_SETUP_API", gh.Url }, { "HALLOW_SETUP_LOCAL", local }, { "HALLOW_SETUP_TOOLKIT", Path.Combine(tmp, "toolkit") }, { "HALLOW_SETUP_RUNKEY", @"Software\HallowSetupTest\Run" } };
-                var stub = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SetupTests.exe");   // any exe with a file version (1.18) stands in for the app
+                var stub = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SetupTests.exe");   // any exe with a file version (Setup's own) stands in for the app
                 gh.Release("Hub", "v1.0", AppZip("Hub", stub));
                 gh.Release("Mixer", "v1.0", AppZip("Mixer", stub), "sha256:" + new string('0', 64));                                       // a wrong checksum
                 gh.Release("Vault", "v1.0", AppZip("Vault", stub), null, "https://example.com/Hallow.Vault.zip");                          // not GitHub's own address
@@ -163,7 +214,7 @@ namespace HallowSetup.Tests
                 r = Setup_(exe, "--install Nothing --quiet", env); Ok(r.Item1 == 2 && r.Item2.Contains("Apps: Mixer, Hub"), "unknown app: exit 2 with the list");
                 r = Setup_(exe, "--install", env); Ok(r.Item1 == 2 && r.Item2.StartsWith("error use:"), "--install without a name: usage");
                 r = Setup_(exe, "--list --json", env);
-                Ok(r.Item2.Contains("\"name\":\"Hub\",\"title\":\"Hallow Hub\",\"kind\":\"app\",\"installable\":true,\"repo\":\"Dom428/hallow-hub\",\"installed\":true,\"version\":\"1.18\""), "--list: Hub now installed (1.18 stand-in)");
+                Ok(r.Item2.Contains("\"name\":\"Hub\",\"title\":\"Hallow Hub\",\"kind\":\"app\",\"installable\":true,\"repo\":\"Dom428/hallow-hub\",\"installed\":true,\"version\":\"" + Program.Version + "\""), "--list: Hub now installed (the stand-in has Setup's own version, " + Program.Version + ")");
                 Ok(!gh.Hits.Any(h => !h.StartsWith("/repos/Dom428/hallow-") && !h.StartsWith("/dl/")), "only the family's release addresses were asked for");
             }
 
