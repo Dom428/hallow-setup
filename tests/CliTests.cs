@@ -164,7 +164,7 @@ namespace HallowSetup.Tests
                 bool ok = false; if (s != null) using (s) { var b = new byte[24]; s.Read(b, 0, 24); ok = b[0] == 0x89 && b[1] == (byte)'P' && (b[16] << 24 | b[17] << 16 | b[18] << 8 | b[19]) == 64 && (b[20] << 24 | b[21] << 16 | b[22] << 8 | b[23]) == 64; }
                 Ok(ok, "1.20: src\\icons\\find.png is there (64 x 64 PNG like the others)");
             }
-            Ok(Uninstaller.QuitByCmdFirst(find) && !Uninstaller.QuitByCmdFirst(Setup.Find("Display")) && !Uninstaller.QuitByCmdFirst(Setup.Find("Hub")) && !Uninstaller.QuitByCmdFirst(null), "1.20: only Find is told \"--cmd quit\" first");
+            Ok(Uninstaller.QuitByCmdFirst(find) && !Uninstaller.QuitByCmdFirst(Setup.Find("Display")) && !Uninstaller.QuitByCmdFirst(Setup.Find("Hub")) && !Uninstaller.QuitByCmdFirst(null), "1.20: Find is told \"--cmd quit\" first (1.21: Files too), not Display or Hub");
             Ok(Uninstaller.QuitWaitMs(find) == 15000, "1.20: Find gets the usual 15 s after quit");
             var keepA = Environment.GetEnvironmentVariable("HALLOW_SETUP_APPDATA"); var keepL = Environment.GetEnvironmentVariable("HALLOW_SETUP_LOCAL");
             var ad = Path.Combine(tmp, "appdata120"); var lo = Path.Combine(tmp, "local120"); var outside = Path.Combine(tmp, "outside120");
@@ -202,12 +202,74 @@ namespace HallowSetup.Tests
             finally { Environment.SetEnvironmentVariable("HALLOW_SETUP_APPDATA", keepA); Environment.SetEnvironmentVariable("HALLOW_SETUP_LOCAL", keepL); }
         }
 
-        static void CliTests(string tmp)
+        // v1.21: Hallow Files - in the list with its icon and no Start with Windows (windowed, like Browser); uninstall runs
+        // "HallowFiles.exe --cmd quit", then "HallowFiles.exe --undo-default-fm", then removes the program folder; its settings follow
+        // the usual choice. A whole uninstall runs in test mode on temp folders: the two commands are only recorded (never run - they
+        // would reach the real app's pipe and the real registry), the Recycle Bin is only recorded, the registry keys are made-up
+        // names under HKCU that don't exist (only read / delete-if-there - nothing is written).
+        static void NewApps121(string tmp)
         {
+            var files = Setup.Find("Files");
+            Ok(files != null && files.Repo == "Dom428/hallow-files" && files.Icon == "folder-open" && Icons.Get("folder-open") != null && Setup.Find("hallow files") == files && Setup.Find("HallowFiles") == files, "1.21: Files (folder-open) in the catalogue");
+            Ok(Setup.Apps.IndexOf(files) == Setup.Apps.IndexOf(Setup.Find("Find")) + 1 && Setup.Apps.IndexOf(files) < Setup.Apps.IndexOf(Setup.Find("Toolkit")) && !files.IsToolkit, "1.21: after Find, before Toolkit");
+            Ok(files.Desc.Contains("file manager") && files.Desc.Contains("dual pane"), "1.21: Files' description");
+            {
+                var pf = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\src\icons\files.png")); var s = File.Exists(pf) ? File.OpenRead(pf) : null;
+                bool ok = false; if (s != null) using (s) { var b = new byte[24]; s.Read(b, 0, 24); ok = b[0] == 0x89 && b[1] == (byte)'P' && (b[16] << 24 | b[17] << 16 | b[18] << 8 | b[19]) == 64 && (b[20] << 24 | b[21] << 16 | b[22] << 8 | b[23]) == 64; }
+                Ok(ok, "1.21: src\\icons\\files.png is there (64 x 64 PNG like the others)");
+            }
+            // no Start with Windows: the row shows "Opens from its shortcut" (NoTray) like Browser, and the switch can't write one
+            Ok(files.NoTray && Setup.Find("Browser").NoTray && !Setup.Find("Find").NoTray && !Setup.Find("Hub").NoTray, "1.21: Files has no Start with Windows (NoTray, like Browser)");
+            Ok(Uninstaller.QuitByCmdFirst(files) && Uninstaller.QuitWaitMs(files) == 30000, "1.21: Files hears \"--cmd quit\" first and gets 30 s (it lets a running copy finish)");
+            Ok(Uninstaller.PointsAtFiles("\"C:\\Users\\x\\AppData\\Local\\Programs\\Hallow Files\\HallowFiles.exe\" \"%1\"") && !Uninstaller.PointsAtFiles("%SystemRoot%\\Explorer.exe") && !Uninstaller.PointsAtFiles(null)
+                && Uninstaller.FilesCommandKeys.Length == 3 && Uninstaller.FilesCommandKeys.All(k => k.StartsWith(@"Software\Classes\") && k.EndsWith(@"\command")), "1.21: the leftover check only ever removes a folder-open command that names HallowFiles.exe");
+            var names = new[] { "HALLOW_SETUP_API", "HALLOW_SETUP_LOCAL", "HALLOW_SETUP_RUNKEY", "HALLOW_SETUP_APPDATA", "HALLOW_SETUP_PROGRAMS", "HALLOW_SETUP_DESKTOP", "HALLOW_SETUP_PROGRAMDATA", "HALLOW_SETUP_REGROOT", "HALLOW_SETUP_PIPE" };
+            var keep = names.ToDictionary(n => n, n => Environment.GetEnvironmentVariable(n));
+            var root = Path.Combine(tmp, "files121"); var lo = Path.Combine(root, "local"); var ad = Path.Combine(root, "appdata"); var sm = Path.Combine(root, "startmenu"); var dt = Path.Combine(root, "desktop"); var pd = Path.Combine(root, "programdata");
+            var fake = "HallowSetupTest-" + Guid.NewGuid().ToString("N");   // never created: every registry step finds nothing there
+            try
+            {
+                foreach (var d in new[] { lo, ad, sm, dt, pd }) Directory.CreateDirectory(d);
+                var vals = new Dictionary<string, string> { { "HALLOW_SETUP_API", "http://127.0.0.1:9/unused" }, { "HALLOW_SETUP_LOCAL", lo }, { "HALLOW_SETUP_RUNKEY", @"Software\" + fake + @"\Run" }, { "HALLOW_SETUP_APPDATA", ad },
+                    { "HALLOW_SETUP_PROGRAMS", sm }, { "HALLOW_SETUP_DESKTOP", dt }, { "HALLOW_SETUP_PROGRAMDATA", pd }, { "HALLOW_SETUP_REGROOT", @"Software\" + fake }, { "HALLOW_SETUP_PIPE", fake } };
+                foreach (var kv in vals) Environment.SetEnvironmentVariable(kv.Key, kv.Value);
+                Ok(Setup.TestMode && Uninstaller.TestGuard() == null, "1.21: test mode with every place pointing at temp folders / made-up keys");
+                Ok(!files.StartsWithWindows, "1.21: no Start with Windows value for Files (read from the made-up key)");
+                Ok(Uninstaller.DataDir(files) == Path.Combine(ad, "HallowFiles") && Uninstaller.KeptFolders(files) != null && Uninstaller.KeptFolders(files).Count == 0, "1.21: settings in %APPDATA%\\HallowFiles, nothing kept");
+                var note = Uninstaller.KeptNote(files);
+                Ok(note != null && note.Contains("File Explorer") && note.Contains("Open folders with Hallow Files") && note.Contains("never touched"), "1.21: Files' uninstall note - File Explorer opens folders again");
+                var prog = Path.Combine(lo, "Programs", "Hallow Files"); var data = Path.Combine(ad, "HallowFiles");
+                Func<bool, UninstallResult> run = withData =>
+                {
+                    Directory.CreateDirectory(prog); File.WriteAllText(Path.Combine(prog, "HallowFiles.exe"), "not a real exe");
+                    Directory.CreateDirectory(data); File.WriteAllText(Path.Combine(data, "settings.json"), "{}");
+                    File.WriteAllText(Path.Combine(sm, "Hallow Files.lnk"), "x"); File.WriteAllText(Path.Combine(dt, "Hallow Files.lnk"), "x");
+                    lock (Uninstaller.TestLog) Uninstaller.TestLog.Clear();
+                    Uninstaller.RecordRecycle = true;
+                    try { return Uninstaller.Uninstall(files, withData, false, p => { }); } finally { Uninstaller.RecordRecycle = false; }
+                };
+                var r = run(false); var log = Uninstaller.TestLog.ToList();
+                int iQuit = log.IndexOf("run HallowFiles.exe --cmd quit"), iUndo = log.IndexOf("run HallowFiles.exe --undo-default-fm"), iProg = log.IndexOf("recycle " + prog);
+                Ok(iQuit == 0 && iUndo == 1 && iProg > iUndo && log.Count(l => l.StartsWith("run ")) == 2, "1.21: uninstall order - --cmd quit, then --undo-default-fm, then the program folder (" + string.Join(" | ", log.Select(l => l.Replace(root, "<tmp>"))) + ")");
+                Ok(log.Contains("recycle " + Path.Combine(sm, "Hallow Files.lnk")) && log.Contains("recycle " + Path.Combine(dt, "Hallow Files.lnk")) && log.IndexOf("recycle " + Path.Combine(sm, "Hallow Files.lnk")) > iUndo, "1.21: shortcuts go after the undo too");
+                Ok(!log.Contains("recycle " + data) && r.Ok && r.Message.Contains("Folders open in File Explorer again") && r.Message.Contains("Your settings stay in " + data), "1.21: settings kept when not ticked; the result says File Explorer opens folders again (" + r.Message.Replace(root, "<tmp>") + ")");
+                Ok(File.Exists(Path.Combine(prog, "HallowFiles.exe")) && File.Exists(Path.Combine(data, "settings.json")), "1.21: test mode deleted nothing (recycles only recorded)");
+                r = run(true); log = Uninstaller.TestLog.ToList();
+                Ok(log.IndexOf("recycle " + data) > log.IndexOf("recycle " + prog) && log.IndexOf("run HallowFiles.exe --undo-default-fm") < log.IndexOf("recycle " + data) && r.Message.Contains("Settings and data are in the Recycle Bin"), "1.21: ticked - settings removed after the undo (it reads its backup from them) and after the program folder");
+            }
+            finally
+            {
+                Uninstaller.RecordRecycle = false;
+                foreach (var kv in keep) Environment.SetEnvironmentVariable(kv.Key, kv.Value);
+            }
+        }
+
+        static void CliTests(string tmp)        {
             // ---- the catalogue: every current family app or part
             NewApps119(tmp);
             NewApps120(tmp);
-            foreach (var n in new[] { "Hub", "Toolkit", "Mixer", "Overlay", "Remote", "Vault", "Clips", "Keys", "Assist", "Guard", "Tasks", "Browser", "VPN", "Torrents", "Financials", "Email", "Home", "Gear", "Capture", "Display", "Find" })
+            NewApps121(tmp);
+            foreach (var n in new[] { "Hub", "Toolkit", "Mixer", "Overlay", "Remote", "Vault", "Clips", "Keys", "Assist", "Guard", "Tasks", "Browser", "VPN", "Torrents", "Financials", "Email", "Home", "Gear", "Capture", "Display", "Find", "Files" })
                 Ok(Setup.Find(n) != null && Setup.Find(n).Repo == "Dom428/hallow-" + n.ToLowerInvariant(), "catalogue: Hallow " + n);
             Ok(Shield.Repo == "Dom428/hallow-shield", "catalogue: Hallow Shield (browser extension)");
             Ok(Setup.FindOther("Places") != null && Setup.FindOther("Places").Kind == "server" && Setup.FindOther("Authenticator") != null && Setup.FindOther("Authenticator").Kind == "phone", "catalogue: Places (NAS) and Authenticator (phone) listed, not installable");

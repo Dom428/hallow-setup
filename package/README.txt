@@ -6,7 +6,7 @@ HOW TO USE
 3. Double-click HallowSetup.exe (no admin needed, nothing to install)
 
 WHAT IT DOES
-- Shows every Hallow app (Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser, VPN, Torrents, Financials, Home, Email, Gear, Capture, Display, Find, Toolkit) and the Hallow
+- Shows every Hallow app (Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser, VPN, Torrents, Financials, Home, Email, Gear, Capture, Display, Find, Files, Toolkit) and the Hallow
   Shield browser extension, with the version on your PC and the newest one.
 - Install / Update downloads that app's release from GitHub only when you click, checks it against
   GitHub's SHA-256 checksum, and runs the app's own installer as you (never as admin).
@@ -23,6 +23,13 @@ HALLOW SHIELD (BROWSER EXTENSION)
 - Uninstall moves the folder to the Recycle Bin; remove Shield's card in the browser yourself.
 - Shield 1.6 and newer: Setup also registers the Hallow family bridge for your user (no admin), so Hallow Hub and
   Remote can show what Shield blocked - only once you turn on "Share counts with Hallow apps on this PC" in Shield.
+
+WHAT'S NEW IN 1.21
+- Hallow Files (a faster file manager: tabs, dual pane, previews, folder sizes, bulk rename) is in the list.
+  It's a windowed app, so it has no Start with Windows switch.
+- Uninstalling Hallow Files asks it to quit, then puts File Explorer back as the program that opens your
+  folders (if you had switched that to Hallow Files) before removing it. Your files are never touched;
+  its settings stay unless you tick them, like every app's.
 
 WHAT'S NEW IN 1.20
 - Hallow Find (instant search for files, apps, sums and settings - nothing leaves the PC) is in the list.

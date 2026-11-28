@@ -28,7 +28,7 @@ namespace HallowSetup
             if (a.Name == "Mixer") items.Add("Its volume changes: every app goes back to full volume and its normal output");
             items.Add("The program folder (" + Uninstaller.ProgramDir(a) + ")");
             items.Add("Its Start menu shortcut (and Desktop shortcut)");
-            items.Add("Its Start with Windows entry");
+            if (!a.NoTray) items.Add("Its Start with Windows entry");   // v1.21: Browser and Files never have one
             if (a.Name == "Keys") items.Add("Its browser autofill link (you can remove the extension from your browser)");
             foreach (var t in items)
             {

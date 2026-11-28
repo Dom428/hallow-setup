@@ -26,7 +26,8 @@ namespace HallowSetup
         public string Name, Icon, Desc;
         public bool IsToolkit { get { return Name == "Toolkit"; } }
         // v1.11: Hallow Browser runs only while its window is open - no tray, no Start with Windows
-        public bool NoTray { get { return Name == "Browser"; } }
+        // v1.21: Hallow Files too (a windowed file manager - no tray icon, no Start with Windows anywhere)
+        public bool NoTray { get { return Name == "Browser" || Name == "Files"; } }
         public string Title { get { return "Hallow " + Name; } }
         public string Repo { get { return "Dom428/hallow-" + Name.ToLowerInvariant(); } }
         public bool Ticked;   // v1.1: picked for "Install ticked"
@@ -56,7 +57,7 @@ namespace HallowSetup
         }
         public void SetStartWithWindows(bool on)
         {
-            if (IsToolkit) return;
+            if (IsToolkit || NoTray) return;   // v1.21: never for a windowed app (Browser, Files)
             using (var k = Registry.CurrentUser.CreateSubKey(Setup.RunKey))
             {
                 if (on) k.SetValue("Hallow" + Name, "\"" + Exe + "\" --tray"); else k.DeleteValue("Hallow" + Name, false);
@@ -97,6 +98,7 @@ namespace HallowSetup
             new HallowApp { Name = "Capture", Icon = "camera",        Desc = "Screenshots with an editor, OCR and a private, encrypted clipboard history (never synced)" },   // v1.19
             new HallowApp { Name = "Display", Icon = "display",       Desc = "Brightness for every monitor, per-game resolution / refresh / HDR, window layouts per monitor setup, night mode" },   // v1.19
             new HallowApp { Name = "Find",    Icon = "magnifying-glass", Desc = "Instant search: every file on your drives as you type, apps, sums and units, the web, Windows settings - no admin, nothing leaves the PC" },   // v1.20
+            new HallowApp { Name = "Files",   Icon = "folder-open",   Desc = "A faster file manager: tabs, dual pane, the real right-click menu, previews, folder sizes, bulk rename - copies through Windows' own copy engine" },   // v1.21
             new HallowApp { Name = "Toolkit", Icon = "bolt",          Desc = "One-click PC tune-up, monitoring, gaming and clean-up tools (installs as admin)" },
         };
 

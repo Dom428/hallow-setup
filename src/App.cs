@@ -1,5 +1,5 @@
 ﻿// Hallow Setup - one window to install, update and start-with-Windows the Hallow family:
-// Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser, VPN, Torrents, Financials, Home, Email, Gear, Capture, Display, Find and Toolkit. Nothing is downloaded until you click Install or Update.
+// Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Assist, Guard, Tasks, Browser, VPN, Torrents, Financials, Home, Email, Gear, Capture, Display, Find, Files and Toolkit. Nothing is downloaded until you click Install or Update.
 // v1.3: Uninstall per app (Uninstall.cs, UninstallDialog.cs).
 // v1.4: Hallow Assist in the list.
 // v1.5: Hallow Guard in the list.
@@ -21,6 +21,8 @@
 //       stays), and Display is asked to quit (pipe, else "--cmd quit") and given 30 s to put every display change back first.
 // v1.20: Hallow Find in the list; uninstalling it sends "--cmd quit" first and always deletes its file index (%LOCALAPPDATA%\HallowFind)
 //       for good - its settings (%APPDATA%\HallowFind) follow "Also remove my settings and data" like every app's.
+// v1.21: Hallow Files in the list (no Start with Windows - it's windowed, like Browser); uninstalling it runs "HallowFiles.exe --cmd quit",
+//       then "HallowFiles.exe --undo-default-fm" (File Explorer opens folders again) before the program folder goes.
 using System;
 using System.Linq;
 using System.Reflection;
@@ -36,14 +38,14 @@ using System.Windows.Media.Imaging;
 [assembly: AssemblyTitle("Hallow Setup")]
 [assembly: AssemblyProduct("Hallow Setup")]
 [assembly: AssemblyDescription("Install and update the Hallow apps")]
-[assembly: AssemblyVersion("1.20.0.0")]
-[assembly: AssemblyFileVersion("1.20.0.0")]
+[assembly: AssemblyVersion("1.21.0.0")]
+[assembly: AssemblyFileVersion("1.21.0.0")]
 
 namespace HallowSetup
 {
     public static class Program
     {
-        public const string Version = "1.20";
+        public const string Version = "1.21";
         public static string AccentHex = "#F07820";
         static string ThemeXaml;
         // v1.10: Theme.xaml in light or dark with the Hallow accent picked in Hallow Toolkit (if any)
@@ -590,7 +592,7 @@ namespace HallowSetup
                     busy = false; checkBtn.IsEnabled = true; a.Ticked = false; Refresh();
                     if (r.StillRunning)
                     {
-                        if (MessageBox.Show(this, a.Title + " didn't close when asked.\n\nClose it anyway and uninstall? Anything it hasn't saved yet is lost.", "Hallow Setup", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes) RunUninstall(a, withData, true);
+                        if (MessageBox.Show(this, a.Title + " didn't close when asked.\n\nClose it anyway and uninstall? Anything it hasn't saved yet is lost." + (a.Name == "Files" ? "\n\nHallow Files waits for a copy or move to finish before it closes - closing it now can stop one halfway (Windows keeps what was already copied)." : ""), "Hallow Setup", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes) RunUninstall(a, withData, true);
                         else Say(a.Title + " is still installed - close it from its tray icon, then click Uninstall again.", true);
                         return;
                     }

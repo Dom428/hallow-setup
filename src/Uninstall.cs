@@ -5,6 +5,7 @@
 // only removed when you tick it, and everything goes to the Recycle Bin - nothing is deleted for good.
 // Never touched: Hallow Vault's backup folders, Hallow Clips' video folder, Hallow Keys' password vault.
 // Deleted for good, always (v1.19 / v1.20): Hallow Capture's clipboard history and Hallow Find's file index - private, and nothing to keep.
+// Hallow Files (v1.21) is asked to put File Explorer back as the folder opener ("--undo-default-fm") before its program folder goes.
 // Hallow Toolkit installs as admin: Setup only starts its own uninstaller (Windows asks you) or tells you what to do.
 // Developer test overrides (on top of Setup.cs's): HALLOW_SETUP_APPDATA, HALLOW_SETUP_PROGRAMS (Start menu Programs),
 // HALLOW_SETUP_DESKTOP, HALLOW_SETUP_PROGRAMDATA, HALLOW_SETUP_REGROOT (HKCU key the Uninstall / NativeMessagingHosts
@@ -150,6 +151,7 @@ namespace HallowSetup
             if (a.Name == "Capture") return "Your clipboard history is deleted (for good - it's encrypted for you and nobody should find it later). Your Hallow Captures folder stays" + (kept != null && kept.Count > 0 ? " (" + kept[0] + ")." : ".");
             if (a.Name == "Display") return "Any display change it made (a game profile's resolution, refresh rate, HDR or brightness, night mode) is put back first: Setup asks it to quit before anything is removed.";
             if (a.Name == "Find") return "Its file index is removed too, for good (" + FindIndexDir() + " - every file name on this PC; Hallow Find builds it again if you reinstall). Its settings follow \"Also remove my settings and data\".";   // v1.20
+            if (a.Name == "Files") return "Folders open in File Explorer again: if you switched \"Open folders with Hallow Files\" on, Setup has Hallow Files put back exactly what it replaced before it's removed. Your files are never touched.";   // v1.21
             return null;
         }
         // v1.13: how many of Hallow VPN's kill switch firewall rules exist (read-only: netsh lists the rules)
@@ -199,6 +201,7 @@ namespace HallowSetup
         public static bool Recycle(string path)
         {
             if (!File.Exists(path) && !Directory.Exists(path)) return true;
+            if (Setup.TestMode && RecordRecycle) { lock (TestLog) TestLog.Add("recycle " + path); return true; }   // v1.21: the uninstall-order test never reaches the Recycle Bin
             var full = Path.GetFullPath(path).TrimEnd('\\');
             if (full.Length < 8 || Path.GetPathRoot(full).TrimEnd('\\') == full) return false;   // never a drive root
             var op = new SHFILEOPSTRUCT { wFunc = FO_DELETE, pFrom = full + "\0\0", fFlags = (ushort)(FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI | FOF_WANTNUKEWARNING) };
@@ -215,12 +218,15 @@ namespace HallowSetup
             var dir = ProgramDir(a);
             if (!string.Equals(Path.GetFileName(dir), a.Title, StringComparison.OrdinalIgnoreCase)) return new UninstallResult { Message = "Unexpected folder " + dir + " - nothing removed." };
             // 1. close it: ask it to quit (as its tray Exit does), wait for it
+            // v1.21: Hallow Files always hears "--cmd quit" first (it saves its open tabs and lets a running copy finish) - even when Setup
+            // sees no copy of it running, which costs nothing: with no Hallow Files to answer, the line just goes nowhere
+            if (a.Name == "Files" && Processes(a).Length == 0) RunOwn(a, "--cmd quit", 10000);
             if (Processes(a).Length > 0)
             {
                 progress(a.Name == "Display" ? "Closing Hallow Display (it puts your display settings back first)..." : "Closing " + a.Title + "...");
                 // v1.20: Hallow Find hears "--cmd quit" first (what its own Uninstall.ps1 does: it saves and lets go of its index, then
                 // exits); the pipe only if that didn't answer ok. Never in test mode: "--cmd" would reach the real app's pipe.
-                bool cmdOk = QuitByCmdFirst(a) && !Setup.TestMode && CmdQuit(a);
+                bool cmdOk = QuitByCmdFirst(a) && RunOwn(a, "--cmd quit", 10000);   // v1.21: test mode records it instead (false = the test pipe next)
                 var q = cmdOk ? "ok" : Send(a, "quit", 3000);
                 // v1.19: Hallow Display must hear "quit" (it puts every display change back, then exits) - if its pipe didn't answer,
                 // the same line through its own "--cmd quit" (never in test mode: that would reach the real app's pipe)
@@ -233,8 +239,20 @@ namespace HallowSetup
                 }
                 Thread.Sleep(500);
             }
-            progress("Removing " + a.Title + "...");
             var notes = new List<string>(); bool ok = true;
+            // v1.21: Hallow Files - File Explorer back as the folder opener, while its exe (and its saved backup of what it replaced, in
+            // %APPDATA%\HallowFiles) are still there; then any per-user command that still points at HallowFiles.exe is removed, so a
+            // folder can never be left opening with a program that's gone
+            if (a.Name == "Files")
+            {
+                progress("Putting File Explorer back as the folder opener...");
+                bool undone = RunOwn(a, "--undo-default-fm", 15000);
+                int left = RemoveFilesCommands();
+                if (undone && left == 0) notes.Add("Folders open in File Explorer again.");
+                else if (left == 0) notes.Add("Folders open in File Explorer again (Setup removed what pointed at Hallow Files).");
+                else { ok = false; notes.Add("Some folders may still try to open with Hallow Files: remove HKEY_CURRENT_USER\\Software\\Classes\\Directory\\shell\\open\\command (and Drive\\shell\\open\\command) with Registry Editor, or reinstall Hallow Files and choose Undo - use Explorer again in its settings."); }
+            }
+            progress("Removing " + a.Title + "...");
             // 2. Mixer: every app back to full volume and its normal output, and no EQ left on (what its own uninstaller does)
             if (a.Name == "Mixer")
             {
@@ -320,15 +338,49 @@ namespace HallowSetup
             return new UninstallResult { Ok = ok, Message = (ok ? a.Title + " is uninstalled." : a.Title + " is partly uninstalled.") + (notes.Count > 0 ? " " + string.Join(" ", notes) : "") };
         }
         // v1.19: how long to wait after "quit" - Hallow Display puts modes, HDR, brightness and gamma back first (DDC/CI is slow)
-        public static int QuitWaitMs(HallowApp a) { return a.Name == "Display" ? 30000 : 15000; }
+        // (v1.21: Hallow Files 30 s too - it lets a copy or move that's running finish before it exits)
+        public static int QuitWaitMs(HallowApp a) { return a.Name == "Display" || a.Name == "Files" ? 30000 : 15000; }
         // v1.19: "HallowDisplay.exe --cmd quit" (the same line over its pipe; waits up to 10 s for the reply)
         // (v1.20: true when it answered ok - exit code 0)
         static bool CmdQuit(HallowApp a)
         {
             try { using (var p = Process.Start(new ProcessStartInfo(a.Exe, "--cmd quit") { UseShellExecute = false, CreateNoWindow = true })) return p.WaitForExit(10000) && p.ExitCode == 0; } catch { return false; }
         }
-        // v1.20: apps told to quit through their own "--cmd quit" before the pipe is tried
-        public static bool QuitByCmdFirst(HallowApp a) { return a != null && a.Name == "Find"; }
+        // v1.20: apps told to quit through their own "--cmd quit" before the pipe is tried (v1.21: Hallow Files too)
+        public static bool QuitByCmdFirst(HallowApp a) { return a != null && (a.Name == "Find" || a.Name == "Files"); }
+        // v1.21: the app's own exe with one switch (no window), true when it exits with 0 within waitMs. In test mode it is never
+        // started - "HallowFiles.exe --cmd quit" would reach the real app's pipe and "--undo-default-fm" the real registry - the line
+        // is only recorded in TestLog ("run HallowFiles.exe --cmd quit", in order with the recycles) and counts as not answered.
+        public static readonly List<string> TestLog = new List<string>();
+        public static bool RunOwn(HallowApp a, string args, int waitMs)
+        {
+            if (Setup.TestMode) { lock (TestLog) TestLog.Add("run " + Path.GetFileName(a.Exe) + " " + args); return false; }
+            try { using (var p = Process.Start(new ProcessStartInfo(a.Exe, args) { UseShellExecute = false, CreateNoWindow = true })) return p.WaitForExit(waitMs) && p.ExitCode == 0; } catch { return false; }
+        }
+        // v1.21: test only - with RecordRecycle on (and test mode), Recycle() records "recycle <path>" in TestLog and deletes nothing,
+        // so a test can run a whole uninstall without touching the Recycle Bin
+        public static bool RecordRecycle;
+        // v1.21: the per-user folder-opening commands Hallow Files can write (its README); a "command" key is removed only while its
+        // command still names HallowFiles.exe. Returns how many are left pointing at it.
+        public static readonly string[] FilesCommandKeys = { @"Software\Classes\Directory\shell\open\command", @"Software\Classes\Drive\shell\open\command",
+            @"Software\Classes\CLSID\{52205fd8-5dfb-447d-801a-d0b52f2e83e1}\shell\opennewwindow\command" };
+        public static bool PointsAtFiles(string command) { return command != null && command.IndexOf("HallowFiles.exe", StringComparison.OrdinalIgnoreCase) >= 0; }
+        static int RemoveFilesCommands()
+        {
+            int left = 0;
+            foreach (var key in FilesCommandKeys)
+            {
+                try
+                {
+                    string cmd; using (var k = Registry.CurrentUser.OpenSubKey(RegRoot + key)) cmd = k == null ? null : k.GetValue("") as string;
+                    if (!PointsAtFiles(cmd)) continue;
+                    Registry.CurrentUser.DeleteSubKeyTree(RegRoot + key, false);
+                    using (var k = Registry.CurrentUser.OpenSubKey(RegRoot + key)) if (k != null && PointsAtFiles(k.GetValue("") as string)) left++;
+                }
+                catch { left++; }
+            }
+            return left;
+        }
         // v1.20: Hallow Find's file index - %LOCALAPPDATA%\HallowFind (index.bin: every file name on the PC; local only, never roams)
         public static string FindIndexDir() { return Path.Combine(Setup.Local, "HallowFind"); }
         // v1.20: the index folder deleted for good, file by file (a cache - it never goes to the Recycle Bin), then its empty folders.
