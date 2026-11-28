@@ -96,6 +96,7 @@ namespace HallowSetup
             new HallowApp { Name = "Gear",    Icon = "battery-three-quarters", Desc = "Battery, charging and wired / wireless for your Logitech gear and Bluetooth devices - read-only" },
             new HallowApp { Name = "Capture", Icon = "camera",        Desc = "Screenshots with an editor, OCR and a private, encrypted clipboard history (never synced)" },   // v1.19
             new HallowApp { Name = "Display", Icon = "display",       Desc = "Brightness for every monitor, per-game resolution / refresh / HDR, window layouts per monitor setup, night mode" },   // v1.19
+            new HallowApp { Name = "Find",    Icon = "magnifying-glass", Desc = "Instant search: every file on your drives as you type, apps, sums and units, the web, Windows settings - no admin, nothing leaves the PC" },   // v1.20
             new HallowApp { Name = "Toolkit", Icon = "bolt",          Desc = "One-click PC tune-up, monitoring, gaming and clean-up tools (installs as admin)" },
         };
 

@@ -4,6 +4,7 @@
 // Start menu / Desktop shortcuts, the Start with Windows value and the Apps & features entry. Settings and data are
 // only removed when you tick it, and everything goes to the Recycle Bin - nothing is deleted for good.
 // Never touched: Hallow Vault's backup folders, Hallow Clips' video folder, Hallow Keys' password vault.
+// Deleted for good, always (v1.19 / v1.20): Hallow Capture's clipboard history and Hallow Find's file index - private, and nothing to keep.
 // Hallow Toolkit installs as admin: Setup only starts its own uninstaller (Windows asks you) or tells you what to do.
 // Developer test overrides (on top of Setup.cs's): HALLOW_SETUP_APPDATA, HALLOW_SETUP_PROGRAMS (Start menu Programs),
 // HALLOW_SETUP_DESKTOP, HALLOW_SETUP_PROGRAMDATA, HALLOW_SETUP_REGROOT (HKCU key the Uninstall / NativeMessagingHosts
@@ -148,6 +149,7 @@ namespace HallowSetup
             if (a.Name == "Torrents") return "Your downloaded files are never touched. Its .torrent / magnet link handler is removed where it points at Hallow Torrents.";
             if (a.Name == "Capture") return "Your clipboard history is deleted (for good - it's encrypted for you and nobody should find it later). Your Hallow Captures folder stays" + (kept != null && kept.Count > 0 ? " (" + kept[0] + ")." : ".");
             if (a.Name == "Display") return "Any display change it made (a game profile's resolution, refresh rate, HDR or brightness, night mode) is put back first: Setup asks it to quit before anything is removed.";
+            if (a.Name == "Find") return "Its file index is removed too, for good (" + FindIndexDir() + " - every file name on this PC; Hallow Find builds it again if you reinstall). Its settings follow \"Also remove my settings and data\".";   // v1.20
             return null;
         }
         // v1.13: how many of Hallow VPN's kill switch firewall rules exist (read-only: netsh lists the rules)
@@ -216,7 +218,10 @@ namespace HallowSetup
             if (Processes(a).Length > 0)
             {
                 progress(a.Name == "Display" ? "Closing Hallow Display (it puts your display settings back first)..." : "Closing " + a.Title + "...");
-                var q = Send(a, "quit", 3000);
+                // v1.20: Hallow Find hears "--cmd quit" first (what its own Uninstall.ps1 does: it saves and lets go of its index, then
+                // exits); the pipe only if that didn't answer ok. Never in test mode: "--cmd" would reach the real app's pipe.
+                bool cmdOk = QuitByCmdFirst(a) && !Setup.TestMode && CmdQuit(a);
+                var q = cmdOk ? "ok" : Send(a, "quit", 3000);
                 // v1.19: Hallow Display must hear "quit" (it puts every display change back, then exits) - if its pipe didn't answer,
                 // the same line through its own "--cmd quit" (never in test mode: that would reach the real app's pipe)
                 if (a.Name == "Display" && !(q != null && q.StartsWith("ok")) && !Setup.TestMode) CmdQuit(a);
@@ -291,6 +296,14 @@ namespace HallowSetup
                 if (left == 0) notes.Add("Your clipboard history is deleted.");
                 else { ok = false; notes.Add("Couldn't delete " + left + (left == 1 ? " file" : " files") + " of your clipboard history in " + Path.Combine(DataDir(a), "history") + "."); }
             }
+            // v1.20: Hallow Find's file index always goes, for good (its own uninstaller does the same); its settings in
+            // %APPDATA%\HallowFind follow the data step below like every app's
+            if (a.Name == "Find")
+            {
+                var left = WipeFindIndex(FindIndexDir());
+                if (left == 0) notes.Add("Its file index is removed too.");
+                else { ok = false; notes.Add("Couldn't delete " + left + (left == 1 ? " item" : " items") + " of its file index in " + FindIndexDir() + "."); }
+            }
             // 5. settings and data, only when ticked, never a kept folder
             if (withData)
             {
@@ -309,9 +322,34 @@ namespace HallowSetup
         // v1.19: how long to wait after "quit" - Hallow Display puts modes, HDR, brightness and gamma back first (DDC/CI is slow)
         public static int QuitWaitMs(HallowApp a) { return a.Name == "Display" ? 30000 : 15000; }
         // v1.19: "HallowDisplay.exe --cmd quit" (the same line over its pipe; waits up to 10 s for the reply)
-        static void CmdQuit(HallowApp a)
+        // (v1.20: true when it answered ok - exit code 0)
+        static bool CmdQuit(HallowApp a)
         {
-            try { using (var p = Process.Start(new ProcessStartInfo(a.Exe, "--cmd quit") { UseShellExecute = false, CreateNoWindow = true })) p.WaitForExit(10000); } catch { }
+            try { using (var p = Process.Start(new ProcessStartInfo(a.Exe, "--cmd quit") { UseShellExecute = false, CreateNoWindow = true })) return p.WaitForExit(10000) && p.ExitCode == 0; } catch { return false; }
+        }
+        // v1.20: apps told to quit through their own "--cmd quit" before the pipe is tried
+        public static bool QuitByCmdFirst(HallowApp a) { return a != null && a.Name == "Find"; }
+        // v1.20: Hallow Find's file index - %LOCALAPPDATA%\HallowFind (index.bin: every file name on the PC; local only, never roams)
+        public static string FindIndexDir() { return Path.Combine(Setup.Local, "HallowFind"); }
+        // v1.20: the index folder deleted for good, file by file (a cache - it never goes to the Recycle Bin), then its empty folders.
+        // Only a folder called HallowFind; links inside are never followed (counted as left). Returns how many entries are left.
+        public static int WipeFindIndex(string indexDir)
+        {
+            if (string.IsNullOrEmpty(indexDir) || !string.Equals(Path.GetFileName(indexDir.TrimEnd('\\')), "HallowFind", StringComparison.OrdinalIgnoreCase) || !Directory.Exists(indexDir)) return 0;
+            try { if ((File.GetAttributes(indexDir) & FileAttributes.ReparsePoint) != 0) return 1; } catch { return 1; }
+            return WipeTree(indexDir);
+        }
+        static int WipeTree(string dir)
+        {
+            int left = 0;
+            foreach (var sub in Directory.GetDirectories(dir))
+            {
+                bool link = true; try { link = (File.GetAttributes(sub) & FileAttributes.ReparsePoint) != 0; } catch { }
+                if (link) left++; else left += WipeTree(sub);
+            }
+            foreach (var f in Directory.GetFiles(dir)) { try { File.SetAttributes(f, FileAttributes.Normal); File.Delete(f); } catch { left++; } }
+            try { if (Directory.GetFileSystemEntries(dir).Length == 0) Directory.Delete(dir); } catch { }
+            return left;
         }
         // v1.19: Hallow Capture's encrypted clipboard history (<data>\history: index.bin, img-<id>.bin and their .tmp files) deleted
         // for good, then the empty folder. Only that one folder, only those files, nothing else under it. Returns how many are left.

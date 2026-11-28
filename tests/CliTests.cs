@@ -150,11 +150,64 @@ namespace HallowSetup.Tests
             finally { Environment.SetEnvironmentVariable("HALLOW_SETUP_APPDATA", keep); }
         }
 
+        // v1.20: Hallow Find - in the list with its icon; uninstall sends "--cmd quit" first and always deletes its file index
+        // (%LOCALAPPDATA%\HallowFind) for good, while its settings follow the usual choice. Temp folders only: HALLOW_SETUP_LOCAL and
+        // HALLOW_SETUP_APPDATA point into the test folder while this runs.
+        static void NewApps120(string tmp)
+        {
+            var find = Setup.Find("Find");
+            Ok(find != null && find.Repo == "Dom428/hallow-find" && find.Icon == "magnifying-glass" && Icons.Get("magnifying-glass") != null && Setup.Find("hallow find") == find, "1.20: Find (magnifying-glass) in the catalogue");
+            Ok(Setup.Apps.IndexOf(find) > Setup.Apps.IndexOf(Setup.Find("Display")) && Setup.Apps.IndexOf(find) < Setup.Apps.IndexOf(Setup.Find("Toolkit")) && !find.NoTray && !find.IsToolkit, "1.20: after Display, before Toolkit, starts in the tray (--tray)");
+            Ok(find.Desc.Contains("nothing leaves the PC"), "1.20: Find's description");
+            {
+                var pf = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\src\icons\find.png")); var s = File.Exists(pf) ? File.OpenRead(pf) : null;
+                bool ok = false; if (s != null) using (s) { var b = new byte[24]; s.Read(b, 0, 24); ok = b[0] == 0x89 && b[1] == (byte)'P' && (b[16] << 24 | b[17] << 16 | b[18] << 8 | b[19]) == 64 && (b[20] << 24 | b[21] << 16 | b[22] << 8 | b[23]) == 64; }
+                Ok(ok, "1.20: src\\icons\\find.png is there (64 x 64 PNG like the others)");
+            }
+            Ok(Uninstaller.QuitByCmdFirst(find) && !Uninstaller.QuitByCmdFirst(Setup.Find("Display")) && !Uninstaller.QuitByCmdFirst(Setup.Find("Hub")) && !Uninstaller.QuitByCmdFirst(null), "1.20: only Find is told \"--cmd quit\" first");
+            Ok(Uninstaller.QuitWaitMs(find) == 15000, "1.20: Find gets the usual 15 s after quit");
+            var keepA = Environment.GetEnvironmentVariable("HALLOW_SETUP_APPDATA"); var keepL = Environment.GetEnvironmentVariable("HALLOW_SETUP_LOCAL");
+            var ad = Path.Combine(tmp, "appdata120"); var lo = Path.Combine(tmp, "local120"); var outside = Path.Combine(tmp, "outside120");
+            Directory.CreateDirectory(ad); Directory.CreateDirectory(lo); Directory.CreateDirectory(outside);
+            try
+            {
+                Environment.SetEnvironmentVariable("HALLOW_SETUP_APPDATA", ad); Environment.SetEnvironmentVariable("HALLOW_SETUP_LOCAL", lo);
+                var ix = Path.Combine(lo, "HallowFind");
+                Ok(Uninstaller.DataDir(find) == Path.Combine(ad, "HallowFind") && Uninstaller.FindIndexDir() == ix, "1.20: settings in %APPDATA%\\HallowFind, the index in %LOCALAPPDATA%\\HallowFind");
+                var note = Uninstaller.KeptNote(find);
+                Ok(note != null && note.Contains("file index is removed too") && note.Contains(ix) && note.Contains("Also remove my settings and data"), "1.20: Find's note - index removed for good, settings follow the choice");
+                Directory.CreateDirectory(Uninstaller.DataDir(find)); File.WriteAllText(Path.Combine(Uninstaller.DataDir(find), "settings.json"), "{\"Engine\":\"google\"}");
+                Ok(Uninstaller.DataBlocked(find) == null && Uninstaller.KeptFolders(find) != null && Uninstaller.KeptFolders(find).Count == 0, "1.20: Find's settings can go when ticked (nothing kept)");
+                // the wipe: every file in the index folder (sub folders too, read-only too), then the folders - nothing next to it
+                Directory.CreateDirectory(Path.Combine(ix, "old"));
+                foreach (var f in new[] { "index.bin", "index.bin.tmp", @"old\index.bin" }) File.WriteAllBytes(Path.Combine(ix, f), new byte[] { 1, 2, 3 });
+                File.SetAttributes(Path.Combine(ix, "index.bin"), FileAttributes.ReadOnly);
+                var sib = Path.Combine(lo, "HallowClips"); Directory.CreateDirectory(sib); File.WriteAllText(Path.Combine(sib, "keep.txt"), "mine");
+                Ok(Uninstaller.WipeFindIndex(ix) == 0 && !Directory.Exists(ix) && File.Exists(Path.Combine(sib, "keep.txt")) && File.Exists(Path.Combine(Uninstaller.DataDir(find), "settings.json")), "1.20: the index folder deleted for good; Clips' folder and Find's settings untouched");
+                Ok(Uninstaller.WipeFindIndex(ix) == 0, "1.20: no index folder - nothing to do");
+                Ok(Uninstaller.WipeFindIndex(sib) == 0 && File.Exists(Path.Combine(sib, "keep.txt")) && Uninstaller.WipeFindIndex(null) == 0 && Uninstaller.WipeFindIndex("") == 0, "1.20: the wipe only ever runs in a folder called HallowFind");
+                // a link inside is never followed: what it points at stays, and it's counted as left
+                Directory.CreateDirectory(ix); File.WriteAllBytes(Path.Combine(ix, "index.bin"), new byte[] { 1 }); File.WriteAllText(Path.Combine(outside, "precious.txt"), "mine");
+                var link = Path.Combine(ix, "link");
+                bool made = false; try { using (var p = Process.Start(new ProcessStartInfo("cmd.exe", "/c mklink /J \"" + link + "\" \"" + outside + "\"") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true })) { p.StandardOutput.ReadToEnd(); p.WaitForExit(10000); } made = Directory.Exists(link); } catch { }
+                if (made)
+                {
+                    int left = Uninstaller.WipeFindIndex(ix);
+                    Ok(left == 1 && File.Exists(Path.Combine(outside, "precious.txt")) && !File.Exists(Path.Combine(ix, "index.bin")), "1.20: a junction in the index folder is never followed (counted as left)");
+                    try { Directory.Delete(link); } catch { }   // the link only (not recursive)
+                    try { Directory.Delete(ix); } catch { }
+                }
+                else Ok(true, "1.20: (junction check skipped - mklink /J unavailable)");
+            }
+            finally { Environment.SetEnvironmentVariable("HALLOW_SETUP_APPDATA", keepA); Environment.SetEnvironmentVariable("HALLOW_SETUP_LOCAL", keepL); }
+        }
+
         static void CliTests(string tmp)
         {
             // ---- the catalogue: every current family app or part
             NewApps119(tmp);
-            foreach (var n in new[] { "Hub", "Toolkit", "Mixer", "Overlay", "Remote", "Vault", "Clips", "Keys", "Assist", "Guard", "Tasks", "Browser", "VPN", "Torrents", "Financials", "Email", "Home", "Gear", "Capture", "Display" })
+            NewApps120(tmp);
+            foreach (var n in new[] { "Hub", "Toolkit", "Mixer", "Overlay", "Remote", "Vault", "Clips", "Keys", "Assist", "Guard", "Tasks", "Browser", "VPN", "Torrents", "Financials", "Email", "Home", "Gear", "Capture", "Display", "Find" })
                 Ok(Setup.Find(n) != null && Setup.Find(n).Repo == "Dom428/hallow-" + n.ToLowerInvariant(), "catalogue: Hallow " + n);
             Ok(Shield.Repo == "Dom428/hallow-shield", "catalogue: Hallow Shield (browser extension)");
             Ok(Setup.FindOther("Places") != null && Setup.FindOther("Places").Kind == "server" && Setup.FindOther("Authenticator") != null && Setup.FindOther("Authenticator").Kind == "phone", "catalogue: Places (NAS) and Authenticator (phone) listed, not installable");
